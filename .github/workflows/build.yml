@@ -1,8 +1,9 @@
 name: Build & Release Dollops Admin
 
 on:
+  workflow_dispatch:  # Allows manual triggering from GitHub Actions tab
   release:
-    types: [published]  # Triggers when you publish a release on GitHub
+    types: [published]
 
 jobs:
 
