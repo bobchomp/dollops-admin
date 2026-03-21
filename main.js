@@ -1,23 +1,20 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
 
-// ---- AUTO UPDATER CONFIG ----
-autoUpdater.autoDownload = false;       // don't download until user says yes
-autoUpdater.autoInstallOnAppQuit = true; // install when app closes if downloaded
+// ---- AUTO UPDATER ----
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
 
 function setupAutoUpdater() {
-  // Check for updates silently on startup (after 3 second delay)
   setTimeout(function() {
     autoUpdater.checkForUpdates().catch(function(err) {
-      // Silently ignore if no internet or repo has no releases yet
       console.log('Update check skipped:', err.message);
     });
   }, 3000);
 
-  // Update available — ask user
   autoUpdater.on('update-available', function(info) {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
@@ -26,13 +23,10 @@ function setupAutoUpdater() {
       detail: 'Version ' + info.version + ' is ready to download.\n\nWould you like to update now? The app will restart automatically when done.',
       buttons: ['Yes, Update Now', 'Remind Me Later'],
       defaultId: 0,
-      cancelId: 1,
-      icon: path.join(__dirname, 'assets', 'icon.ico')
+      cancelId: 1
     }).then(function(result) {
       if (result.response === 0) {
-        // User clicked Yes — start downloading
         autoUpdater.downloadUpdate();
-        // Show downloading message
         dialog.showMessageBox(mainWindow, {
           type: 'info',
           title: 'Downloading Update...',
@@ -44,22 +38,19 @@ function setupAutoUpdater() {
     });
   });
 
-  // No update found — do nothing (silent)
   autoUpdater.on('update-not-available', function() {
     console.log('App is up to date.');
   });
 
-  // Download complete — prompt to restart
   autoUpdater.on('update-downloaded', function(info) {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
-      title: 'Update Ready to Install 🍦',
-      message: 'Update downloaded successfully!',
-      detail: 'Version ' + info.version + ' has been downloaded.\n\nClick "Restart & Install" to apply the update now, or "Later" to install it next time you close the app.',
+      title: 'Update Ready 🍦',
+      message: 'Update downloaded!',
+      detail: 'Version ' + info.version + ' has been downloaded.\n\nClick "Restart & Install" to apply the update now, or "Later" to install it when you next close the app.',
       buttons: ['Restart & Install', 'Later'],
       defaultId: 0,
-      cancelId: 1,
-      icon: path.join(__dirname, 'assets', 'icon.ico')
+      cancelId: 1
     }).then(function(result) {
       if (result.response === 0) {
         autoUpdater.quitAndInstall();
@@ -67,7 +58,6 @@ function setupAutoUpdater() {
     });
   });
 
-  // Error handling — silent, just log
   autoUpdater.on('error', function(err) {
     console.log('Auto-updater error:', err.message);
   });
@@ -85,7 +75,10 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'src', 'preload.js')
     },
-    icon: path.join(__dirname, 'assets', 'icon.ico'),
+    // Use .ico on Windows, .png on Mac
+    icon: process.platform === 'darwin'
+      ? path.join(__dirname, 'assets', 'icon.png')
+      : path.join(__dirname, 'assets', 'icon.ico'),
     title: 'Dollops Ice Cream — Admin',
     show: false,
     backgroundColor: '#FFFBF5'
@@ -95,20 +88,25 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', function() {
     mainWindow.show();
-    // Set up auto updater after window is shown
     setupAutoUpdater();
   });
 
-  // Remove default menu bar
   mainWindow.setMenuBarVisibility(false);
 }
 
+// ---- APP LIFECYCLE ----
 app.whenReady().then(createWindow);
 
+// On Mac: close window but keep app running in dock (standard Mac behaviour)
 app.on('window-all-closed', function() {
-  app.quit();
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
 
+// On Mac: re-create window when clicking dock icon
 app.on('activate', function() {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
 });
