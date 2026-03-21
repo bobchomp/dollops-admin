@@ -1,9 +1,8 @@
 name: Build & Release Dollops Admin
 
 on:
-  push:
-    tags:
-      - 'v*'  # Triggers when you push a tag like v1.0.0, v1.1.0 etc.
+  release:
+    types: [published]  # Triggers when you publish a release on GitHub
 
 jobs:
 
