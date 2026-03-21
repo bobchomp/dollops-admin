@@ -1,7 +1,11 @@
 {
   "name": "dollops-admin",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "Dollops Ice Cream — Admin Management System",
+  "author": {
+    "name": "Ross Mackenzie",
+    "email": "ross@dollopsicecream.uk"
+  },
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -11,15 +15,20 @@
   "build": {
     "appId": "uk.dollopsicecream.admin",
     "productName": "Dollops Admin",
+    "copyright": "© 2025 Ross Mackenzie — Dollops Ice Cream",
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "publisherName": "Ross Mackenzie"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "license": null
     },
     "files": [
       "main.js",
