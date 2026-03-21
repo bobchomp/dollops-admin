@@ -1,6 +1,6 @@
 {
   "name": "dollops-admin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Dollops Ice Cream — Admin Management System",
   "main": "main.js",
   "scripts": {
@@ -26,13 +26,20 @@
       "src/**/*",
       "assets/**/*",
       "node_modules/**/*"
-    ]
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "bobchomp",
+      "repo": "dollops-admin-releases",
+      "releaseType": "release"
+    }
   },
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.0.0"
   },
   "dependencies": {
+    "electron-updater": "^6.1.7",
     "firebase": "^10.7.0"
   }
 }
