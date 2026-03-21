@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dollops Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Firebase SDKs via CDN -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    /* ===================== RESET & BASE ===================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --pink: #FF6B9D; --pink-light: #FFB3D1; --yellow: #FFD93D;
+      --teal: #06D6A0; --dark: #1a1a2e; --bg: #f5f7fa;
+      --white: #ffffff; --border: #e8ecf0; --text: #333;
+      --text-muted: #888; --radius: 16px;
+      --shadow: 0 4px 20px rgba(0,0,0,0.08);
+      --green: #2e7d32; --red: #c62828;
+    }
+    body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; }
+    h1,h2,h3,h4 { font-family: 'Fredoka One', cursive; }
+    input, select, textarea, button { font-family: 'Nunito', sans-serif; }
+    a { color: var(--pink); }
+
+    /* ===================== LOGIN ===================== */
+    .login-screen {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #fff0f8, #f0fff8);
+    }
+    .login-card {
+      background: white; border-radius: 24px; padding: 48px 40px;
+      width: 420px; box-shadow: 0 20px 60px rgba(255,107,157,0.15); text-align: center;
+    }
+    .login-logo { font-size: 72px; margin-bottom: 12px; }
+    .login-card h1 { font-size: 36px; color: var(--dark); margin-bottom: 8px; }
+    .login-card > p { color: #888; margin-bottom: 32px; }
+    .login-error { color: #e53e3e; font-size: 14px; font-weight: 700; min-height: 20px; margin-bottom: 8px; }
+    .hidden { display: none !important; }
+
+    /* ===================== LAYOUT ===================== */
+    .app-layout { display: grid; grid-template-columns: 220px 1fr; height: 100vh; }
+
+    /* ===================== SIDEBAR ===================== */
+    .sidebar {
+      background: var(--dark); padding: 24px 16px;
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .sidebar-logo { font-family: 'Fredoka One', cursive; font-size: 20px; color: white; padding: 0 8px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px; color: rgba(255,255,255,0.6); font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; border: none; background: none; text-align: left; width: 100%; }
+    .nav-item:hover { background: rgba(255,255,255,0.08); color: white; }
+    .nav-item.active { background: var(--pink); color: white; box-shadow: 0 4px 16px rgba(255,107,157,0.3); }
+    .nav-icon { font-size: 18px; }
+    .logout-btn { background: none; border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.6); padding: 10px 14px; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: 13px; transition: all 0.2s; margin-top: 12px; }
+    .logout-btn:hover { background: rgba(255,255,255,0.08); color: white; }
+
+    /* ===================== MAIN ===================== */
+    .main-content { overflow-y: auto; padding: 32px 36px; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .section > h1 { font-size: 38px; color: var(--dark); margin-bottom: 28px; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .section-header h1 { margin-bottom: 0; font-size: 34px; }
+
+    /* ===================== BUTTONS ===================== */
+    .btn { padding: 11px 22px; border-radius: 50px; font-weight: 800; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-primary { background: var(--pink); color: white; box-shadow: 0 4px 14px rgba(255,107,157,0.35); }
+    .btn-primary:hover { background: #e0578a; transform: translateY(-1px); }
+    .btn-danger { background: #e53e3e; color: white; }
+    .btn-danger:hover { background: #c53030; }
+    .btn-ghost { background: white; border: 2px solid var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--pink); color: var(--pink); }
+    .btn-sm { padding: 7px 16px; font-size: 13px; }
+    .btn-full { width: 100%; }
+
+    /* ===================== FORMS ===================== */
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-weight: 700; font-size: 13px; color: #555; margin-bottom: 5px; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%; padding: 11px 14px; border: 2px solid var(--border);
+      border-radius: 12px; font-size: 15px; outline: none; transition: border-color 0.2s;
+      background: white;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--pink); }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+
+    /* ===================== STATS ===================== */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 32px; }
+    .stat-card { background: white; border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); text-align: center; border: 2px solid var(--border); transition: all 0.3s; }
+    .stat-card:hover { border-color: var(--pink); transform: translateY(-3px); }
+    .stat-number { font-family: 'Fredoka One', cursive; font-size: 40px; color: var(--pink); }
+    .stat-label { font-size: 12px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+    /* ===================== ORDERS ===================== */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-pill { padding: 8px 18px; border-radius: 50px; border: 2px solid var(--border); background: white; font-weight: 800; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .filter-pill:hover, .filter-pill.active { background: var(--pink); border-color: var(--pink); color: white; }
+    .orders-table { width: 100%; border-collapse: collapse; }
+    .orders-table thead th { background: var(--dark); color: white; padding: 12px 16px; text-align: left; font-family: 'Fredoka One', cursive; font-size: 14px; }
+    .orders-table thead th:first-child { border-radius: 12px 0 0 0; }
+    .orders-table thead th:last-child { border-radius: 0 12px 0 0; }
+    .orders-table tbody tr { background: white; cursor: pointer; transition: all 0.15s; }
+    .orders-table tbody tr:hover { background: #fff0f8; }
+    .orders-table tbody tr:not(:last-child) { border-bottom: 1px solid var(--border); }
+    .orders-table td { padding: 13px 16px; font-size: 14px; }
+    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 50px; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+    .status-new        { background: #e3f2fd; color: #1565c0; }
+    .status-processing { background: #fff8e1; color: #f57f17; }
+    .status-completed  { background: #e8f5e9; color: #2e7d32; }
+    .status-cancelled  { background: #ffebee; color: #c62828; }
+    .pay-badge { display: inline-block; padding: 3px 10px; border-radius: 50px; font-size: 11px; font-weight: 800; }
+    .pay-cash { background: #e8f5e9; color: #2e7d32; }
+    .pay-card { background: #e3f2fd; color: #1565c0; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state .empty-icon { font-size: 64px; margin-bottom: 16px; }
+    .empty-state p { font-size: 16px; }
+
+    /* ===================== MODAL ===================== */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 500; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.25s; padding: 20px; }
+    .modal-overlay.show { opacity: 1; pointer-events: all; }
+    .modal { background: white; border-radius: 20px; padding: 36px; width: 100%; max-width: 580px; max-height: 85vh; overflow-y: auto; position: relative; transform: scale(0.95); transition: transform 0.25s; }
+    .modal-overlay.show .modal { transform: scale(1); }
+    .modal h2 { font-size: 28px; margin-bottom: 20px; color: var(--dark); }
+    .modal-close { position: absolute; top: 16px; right: 18px; background: none; border: none; font-size: 20px; cursor: pointer; color: #aaa; }
+    .modal-close:hover { color: var(--text); }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .detail-block h4 { font-family: 'Fredoka One', cursive; font-size: 16px; margin-bottom: 8px; color: var(--pink); }
+    .detail-block p { font-size: 14px; color: #555; line-height: 1.7; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .items-table th { background: var(--bg); padding: 9px 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: var(--text-muted); }
+    .items-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .items-table .total-row td { font-family: 'Fredoka One', cursive; font-size: 16px; border: none; padding-top: 12px; }
+    .status-update-row { display: flex; align-items: center; gap: 12px; margin-top: 20px; padding-top: 20px; border-top: 2px solid var(--border); }
+    .status-update-row label { font-weight: 800; font-size: 14px; }
+    .status-update-row select { padding: 9px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; }
+
+    /* ===================== PRODUCTS ===================== */
+    .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .product-card { background: white; border-radius: var(--radius); padding: 18px; display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow); border: 2px solid var(--border); transition: all 0.2s; }
+    .product-card:hover { border-color: var(--pink); }
+    .product-card.unavailable { opacity: 0.55; }
+    .product-emoji { font-size: 38px; flex-shrink: 0; }
+    .product-info { flex: 1; min-width: 0; }
+    .product-info strong { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .product-info span { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .product-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+
+    /* ===================== P&L ===================== */
+    .pl-year-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+    .pl-year-tab { padding: 8px 20px; border-radius: 50px; border: 2px solid var(--border); background: white; font-weight: 800; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .pl-year-tab.active { background: var(--pink); border-color: var(--pink); color: white; }
+    .pl-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 28px; }
+    .pl-stat { background: white; border-radius: var(--radius); padding: 22px; text-align: center; box-shadow: var(--shadow); border: 2px solid var(--border); }
+    .pl-stat.inc { border-color: #66bb6a; }
+    .pl-stat.exp { border-color: #ef5350; }
+    .pl-stat.profit { border-color: var(--pink); }
+    .pl-stat.profit.neg { border-color: #ef5350; background: #fff5f5; }
+    .pl-num { font-family: 'Fredoka One', cursive; font-size: 34px; }
+    .pl-num.green { color: var(--green); }
+    .pl-num.red   { color: var(--red); }
+    .pl-num.pink  { color: var(--pink); }
+    .pl-label { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-top: 4px; }
+    .pl-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .pl-panel { background: white; border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
+    .pl-panel h3 { font-size: 18px; margin-bottom: 16px; }
+    .pl-panel h3.inc { color: var(--green); }
+    .pl-panel h3.exp { color: var(--red); }
+    .pl-list { width: 100%; border-collapse: collapse; }
+    .pl-list th { background: var(--bg); padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: .5px; }
+    .pl-list td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .pl-list tr:last-child td { border: none; }
+    .auto-tag { background: #e3f2fd; color: #1565c0; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 50px; }
+    .del-btn { background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px; }
+    .del-btn:hover { color: #ef5350; }
+    .pl-add-form { background: var(--bg); border-radius: 12px; padding: 14px; margin-top: 14px; display: grid; gap: 8px; }
+    .pl-add-form.inc-form { grid-template-columns: 1fr 1.2fr 1fr auto; }
+    .pl-add-form.exp-form { grid-template-columns: 1fr 1.2fr 1fr auto; }
+    .pl-add-form label { font-size: 11px; font-weight: 800; color: #555; display: block; margin-bottom: 3px; }
+    .pl-add-form input, .pl-add-form select { width: 100%; padding: 8px 10px; border: 2px solid var(--border); border-radius: 8px; font-size: 13px; }
+    .pl-add-form button { padding: 8px 14px; background: var(--pink); color: white; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; align-self: end; white-space: nowrap; font-size: 13px; }
+    .pl-add-form button:hover { background: #e0578a; }
+    .monthly-wrap { background: white; border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); overflow-x: auto; margin-bottom: 20px; }
+    .monthly-wrap h3 { font-size: 18px; margin-bottom: 16px; }
+    .monthly-tbl { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+    .monthly-tbl th { background: var(--dark); color: white; padding: 9px 11px; text-align: right; font-family: 'Fredoka One', cursive; }
+    .monthly-tbl th:first-child { text-align: left; border-radius: 8px 0 0 0; }
+    .monthly-tbl th:last-child { border-radius: 0 8px 0 0; }
+    .monthly-tbl td { padding: 8px 11px; border-bottom: 1px solid var(--border); text-align: right; }
+    .monthly-tbl td:first-child { text-align: left; font-weight: 700; }
+    .monthly-tbl .sec-head td { background: var(--bg); font-family: 'Fredoka One', cursive; font-size: 13px; color: var(--pink); text-align: left; }
+    .monthly-tbl .tot-row td { font-family: 'Fredoka One', cursive; background: #f0f4ff; }
+    .monthly-tbl .profit-row td { font-family: 'Fredoka One', cursive; font-size: 13px; background: #fff0f8; }
+
+    /* ===================== SETTINGS ===================== */
+    .settings-card { background: white; border-radius: var(--radius); padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow); }
+    .settings-card h3 { font-size: 20px; margin-bottom: 18px; }
+    .settings-card p { color: #666; margin-bottom: 14px; font-size: 14px; }
+    .danger-zone { border: 2px solid #ffebee; }
+    .danger-zone h3 { color: var(--red); }
+    .conn-status { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 50px; font-weight: 700; font-size: 14px; }
+    .conn-status.online  { background: #e8f5e9; color: #2e7d32; }
+    .conn-status.offline { background: #ffebee; color: #c62828; }
+
+    /* ===================== LOADING ===================== */
+    .loading-overlay { position: fixed; inset: 0; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 900; }
+    .loading-icon { font-size: 72px; animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .loading-overlay p { font-family: 'Fredoka One', cursive; font-size: 24px; color: var(--pink); margin-top: 16px; }
+
+    /* ===================== TOAST ===================== */
+    .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--dark); color: white; padding: 12px 24px; border-radius: 50px; font-weight: 700; font-size: 14px; z-index: 9999; transition: transform 0.3s; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ===================== MISC ===================== */
+    .badge-new { background: #fff3cd; color: #856404; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 50px; margin-left: 6px; }
+  </style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-icon">🍦</div>
+  <p>Loading Dollops Admin...</p>
+</div>
+
+<!-- LOGIN -->
+<div class="login-screen hidden" id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">🍦</div>
+    <h1>Dollops Admin</h1>
+    <p>Sign in to manage your store</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="ross@dollopsicecream.uk" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" />
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <button class="btn btn-primary btn-full" id="loginBtn">Sign In →</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app-layout hidden" id="appLayout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">🍦 Dollops</div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-section="dashboard"><span class="nav-icon">📊</span> Dashboard</button>
+      <button class="nav-item" data-section="orders"><span class="nav-icon">📦</span> Orders <span class="badge-new hidden" id="newOrderBadge">!</span></button>
+      <button class="nav-item" data-section="products"><span class="nav-icon">🍨</span> Products</button>
+      <button class="nav-item" data-section="pl"><span class="nav-icon">💰</span> Profit &amp; Loss</button>
+      <button class="nav-item" data-section="settings"><span class="nav-icon">⚙️</span> Settings</button>
+    </nav>
+    <button class="logout-btn" id="logoutBtn">← Sign Out</button>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+
+    <!-- DASHBOARD -->
+    <div class="section active" id="section-dashboard">
+      <h1>Dashboard</h1>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-number" id="statTotal">0</div><div class="stat-label">Total Orders</div></div>
+        <div class="stat-card"><div class="stat-number" id="statNew">0</div><div class="stat-label">New Orders</div></div>
+        <div class="stat-card"><div class="stat-number" id="statRevenue">£0</div><div class="stat-label">Total Revenue</div></div>
+        <div class="stat-card"><div class="stat-number" id="statProducts">0</div><div class="stat-label">Active Products</div></div>
+      </div>
+      <h2 style="font-size:22px;margin-bottom:14px;">Recent Orders</h2>
+      <div id="dashRecentOrders"></div>
+    </div>
+
+    <!-- ORDERS -->
+    <div class="section" id="section-orders">
+      <div class="section-header">
+        <h1>Orders</h1>
+        <button class="btn btn-ghost btn-sm" id="refreshOrders">🔄 Refresh</button>
+      </div>
+      <div class="filter-bar">
+        <button class="filter-pill active" data-status="all">All</button>
+        <button class="filter-pill" data-status="New">New</button>
+        <button class="filter-pill" data-status="Processing">Processing</button>
+        <button class="filter-pill" data-status="Completed">Completed</button>
+        <button class="filter-pill" data-status="Cancelled">Cancelled</button>
+      </div>
+      <div id="ordersTableWrap"></div>
+    </div>
+
+    <!-- PRODUCTS -->
+    <div class="section" id="section-products">
+      <div class="section-header">
+        <h1>Products</h1>
+        <button class="btn btn-primary btn-sm" id="addProductBtn">+ Add Product</button>
+      </div>
+      <div class="products-grid" id="productsGrid"></div>
+    </div>
+
+    <!-- P&L -->
+    <div class="section" id="section-pl">
+      <h1>Profit &amp; Loss</h1>
+      <div class="pl-year-tabs" id="plYearTabs"></div>
+      <div class="pl-summary">
+        <div class="pl-stat inc"><div class="pl-num green" id="plIncome">£0.00</div><div class="pl-label">Total Income</div></div>
+        <div class="pl-stat exp"><div class="pl-num red"   id="plExpenses">£0.00</div><div class="pl-label">Total Outgoings</div></div>
+        <div class="pl-stat profit" id="plProfitCard"><div class="pl-num pink" id="plProfit">£0.00</div><div class="pl-label">Net Profit</div></div>
+      </div>
+      <div class="pl-panels">
+        <!-- Income -->
+        <div class="pl-panel">
+          <h3 class="inc">📈 Income</h3>
+          <table class="pl-list">
+            <thead><tr><th>Date</th><th>Description</th><th>Amount</th><th></th></tr></thead>
+            <tbody id="incomeBody"></tbody>
+          </table>
+          <div class="pl-add-form inc-form">
+            <div><label>Date</label><input type="date" id="incDate" /></div>
+            <div><label>Description</label><input type="text" id="incDesc" placeholder="e.g. Bank Interest" /></div>
+            <div><label>Amount (£)</label><input type="number" step="0.01" id="incAmount" placeholder="0.00" /></div>
+            <button onclick="addIncome()">+ Add</button>
+          </div>
+        </div>
+        <!-- Expenses -->
+        <div class="pl-panel">
+          <h3 class="exp">📉 Outgoings</h3>
+          <table class="pl-list">
+            <thead><tr><th>Date</th><th>Category</th><th>Amount</th><th></th></tr></thead>
+            <tbody id="expenseBody"></tbody>
+          </table>
+          <div class="pl-add-form exp-form">
+            <div><label>Date</label><input type="date" id="expDate" /></div>
+            <div><label>Category</label>
+              <select id="expCat">
+                <option>Order Costs</option>
+                <option>Website &amp; Email</option>
+                <option>Equipment Costs</option>
+                <option>Tub Labels</option>
+                <option>Product Research</option>
+                <option>Packaging</option>
+                <option>Marketing</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div><label>Amount (£)</label><input type="number" step="0.01" id="expAmount" placeholder="0.00" /></div>
+            <button onclick="addExpense()">+ Add</button>
+          </div>
+        </div>
+      </div>
+      <!-- Monthly Breakdown -->
+      <div class="monthly-wrap">
+        <h3>📅 Monthly Breakdown</h3>
+        <table class="monthly-tbl" id="monthlyTbl"></table>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">
+        <button class="btn btn-primary" onclick="exportPLCSV()">📥 Export P&amp;L as CSV</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('excelFileInput').click()">📊 Import Excel</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('pdfFileInput').click()">🏦 Import Bank Statement PDF</button>
+      </div>
+      <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display:none" onchange="handleExcelImport(this.files[0])" />
+      <input type="file" id="pdfFileInput"   accept=".pdf"       style="display:none" onchange="handlePDFImport(this.files[0])" />
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="section" id="section-settings">
+      <h1>Settings</h1>
+      <div class="settings-card">
+        <h3>Connection Status</h3>
+        <p>Your app is connected to Firebase — orders placed on the website appear here in real time.</p>
+        <div class="conn-status online" id="connStatus">🟢 Connected to Firebase</div>
+      </div>
+      <div class="settings-card">
+        <h3>Export Orders</h3>
+        <p>Download all orders as a CSV spreadsheet.</p>
+        <button class="btn btn-primary" id="exportOrdersBtn">📥 Export Orders CSV</button>
+      </div>
+      <div class="settings-card danger-zone">
+        <h3>⚠️ Danger Zone</h3>
+        <p>These actions cannot be undone. Be careful!</p>
+        <button class="btn btn-danger" id="clearPLBtn" style="margin-right:10px">Clear P&amp;L Data</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ORDER DETAIL MODAL -->
+<div class="modal-overlay" id="orderModalOverlay">
+  <div class="modal">
+    <button class="modal-close" id="closeOrderModal">✕</button>
+    <div id="orderModalContent"></div>
+  </div>
+</div>
+
+<!-- PRODUCT MODAL -->
+<div class="modal-overlay" id="productModalOverlay">
+  <div class="modal">
+    <button class="modal-close" id="closeProductModal">✕</button>
+    <h2 id="productModalTitle">Edit Product</h2>
+    <div class="form-group"><label>Name</label><input type="text" id="editName" /></div>
+    <div class="form-group"><label>Price (£)</label><input type="number" step="0.01" id="editPrice" /></div>
+    <div class="form-group"><label>Category</label>
+      <select id="editCategory"><option value="Ice Cream">Ice Cream</option><option value="Sorbet">Sorbet</option></select>
+    </div>
+    <div class="form-group"><label>Description</label><textarea id="editDesc"></textarea></div>
+    <div class="form-group"><label>Allergens (comma separated)</label><input type="text" id="editAllergens" /></div>
+    <div class="form-group"><label>Status</label>
+      <select id="editAvailable"><option value="true">✅ Available</option><option value="false">❌ Hidden</option></select>
+    </div>
+    <input type="hidden" id="editProductId" />
+    <button class="btn btn-primary btn-full" id="saveProductBtn">Save Changes</button>
+  </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="importModalOverlay">
+  <div class="modal" style="max-width:700px">
+    <button class="modal-close" onclick="hideModal('importModalOverlay')">✕</button>
+    <div id="importModalContent"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- SheetJS for Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- PDF.js for bank statement -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+<script src="imports.js"></script>
+
+<script>
+// ============================================================
+// FIREBASE CONFIG
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyC6TdujtdYrJL3mVwSUfLjW6MPmnS80x1k",
+  authDomain: "dollopsicecream.firebaseapp.com",
+  projectId: "dollopsicecream",
+  storageBucket: "dollopsicecream.firebasestorage.app",
+  messagingSenderId: "704872778759",
+  appId: "1:704872778759:web:729ed88f5bc2ca852c2ea2"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ============================================================
+// GLOBALS
+// ============================================================
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+let currentFilter  = 'all';
+let currentPLYear  = new Date().getFullYear();
+let allOrders      = [];
+let ordersListener = null;
+
+// ============================================================
+// HELPERS
+// ============================================================
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2800);
+}
+function fmtDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+}
+function fmtCurrency(n) {
+  return '£' + parseFloat(n||0).toFixed(2);
+}
+function showModal(id) {
+  document.getElementById(id).classList.add('show');
+}
+function hideModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+auth.onAuthStateChanged(function(user) {
+  document.getElementById('loadingOverlay').classList.add('hidden');
+  if (user) {
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('appLayout').classList.remove('hidden');
+    initApp();
+  } else {
+    document.getElementById('loginScreen').classList.remove('hidden');
+    document.getElementById('appLayout').classList.add('hidden');
+  }
+});
+
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+
+function doLogin() {
+  var email = document.getElementById('loginEmail').value.trim();
+  var pass  = document.getElementById('loginPassword').value;
+  var errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if (!email || !pass) { errEl.textContent = 'Please enter your email and password.'; return; }
+  auth.signInWithEmailAndPassword(email, pass)
+    .catch(function(err) {
+      errEl.textContent = 'Incorrect email or password. Please try again.';
+    });
+}
+
+document.getElementById('logoutBtn').addEventListener('click', function() {
+  if (ordersListener) ordersListener();
+  auth.signOut();
+});
+
+// ============================================================
+// INIT
+// ============================================================
+function initApp() {
+  loadDashboard();
+  listenToOrders();
+  loadProducts();
+
+  // Nav
+  document.querySelectorAll('.nav-item').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.nav-item').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.section').forEach(function(s){ s.classList.remove('active'); });
+      btn.classList.add('active');
+      var sec = btn.dataset.section;
+      document.getElementById('section-' + sec).classList.add('active');
+      if (sec === 'orders')    renderOrders();
+      if (sec === 'products')  loadProducts();
+      if (sec === 'pl')        loadPL();
+    });
+  });
+
+  // Filter pills
+  document.querySelectorAll('.filter-pill').forEach(function(p){
+    p.addEventListener('click', function(){ currentFilter = p.dataset.status; renderOrders(); document.querySelectorAll('.filter-pill').forEach(function(x){ x.classList.toggle('active', x.dataset.status===currentFilter); }); });
+  });
+
+  // Modals
+  document.getElementById('closeOrderModal').addEventListener('click',   function(){ hideModal('orderModalOverlay'); });
+  document.getElementById('closeProductModal').addEventListener('click',  function(){ hideModal('productModalOverlay'); });
+  document.getElementById('addProductBtn').addEventListener('click',      openNewProductModal);
+  document.getElementById('saveProductBtn').addEventListener('click',     saveProduct);
+  document.getElementById('refreshOrders').addEventListener('click',      function(){ listenToOrders(); showToast('Orders refreshed!'); });
+  document.getElementById('exportOrdersBtn').addEventListener('click',    exportOrdersCSV);
+  document.getElementById('clearPLBtn').addEventListener('click',         clearPLData);
+
+  // Set today in PL date fields
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('incDate').value = today;
+  document.getElementById('expDate').value = today;
+}
+
+// ============================================================
+// ORDERS — REAL TIME FROM FIREBASE
+// ============================================================
+function listenToOrders() {
+  if (ordersListener) ordersListener(); // unsubscribe previous
+  ordersListener = db.collection('orders')
+    .orderBy('date', 'desc')
+    .onSnapshot(function(snapshot) {
+      allOrders = [];
+      snapshot.forEach(function(doc) {
+        allOrders.push(Object.assign({ firestoreId: doc.id }, doc.data()));
+      });
+      renderOrders();
+      loadDashboard();
+      updateNewOrderBadge();
+    }, function(err) {
+      console.error('Orders listener error:', err);
+      document.getElementById('connStatus').className = 'conn-status offline';
+      document.getElementById('connStatus').textContent = '🔴 Connection error — check internet';
+    });
+}
+
+function updateNewOrderBadge() {
+  var newCount = allOrders.filter(function(o){ return o.status === 'New'; }).length;
+  var badge = document.getElementById('newOrderBadge');
+  if (newCount > 0) { badge.textContent = newCount; badge.classList.remove('hidden'); }
+  else { badge.classList.add('hidden'); }
+}
+
+function renderOrders() {
+  var filtered = currentFilter === 'all' ? allOrders : allOrders.filter(function(o){ return o.status === currentFilter; });
+  var wrap = document.getElementById('ordersTableWrap');
+  if (filtered.length === 0) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No orders found.</p></div>';
+    return;
+  }
+  wrap.innerHTML = '<table class="orders-table"><thead><tr>' +
+    '<th>Order ID</th><th>Customer</th><th>Type</th><th>Payment</th><th>Total</th><th>Date</th><th>Status</th>' +
+    '</tr></thead><tbody>' +
+    filtered.map(function(o) {
+      var payHtml = o.paymentMethod === 'cash'
+        ? '<span class="pay-badge pay-cash">💵 Cash</span>'
+        : '<span class="pay-badge pay-card">💳 Card</span>';
+      return '<tr onclick="openOrderModal(\'' + o.firestoreId + '\')">' +
+        '<td style="font-family:\'Fredoka One\',cursive;color:var(--pink);font-size:13px">' + (o.id||o.firestoreId) + '</td>' +
+        '<td style="font-weight:700">' + (o.customer ? o.customer.name : '') + '</td>' +
+        '<td>' + (o.orderType==='delivery'?'🚚 Delivery':'🏪 Collection') + '</td>' +
+        '<td>' + payHtml + '</td>' +
+        '<td style="font-family:\'Fredoka One\',cursive">' + fmtCurrency(o.total) + '</td>' +
+        '<td style="color:var(--text-muted);font-size:13px">' + fmtDate(o.date) + '</td>' +
+        '<td><span class="status-badge status-' + (o.status||'new').toLowerCase() + '">' + (o.status||'New') + '</span></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function openOrderModal(firestoreId) {
+  var o = allOrders.find(function(x){ return x.firestoreId === firestoreId; });
+  if (!o) return;
+  var custName  = o.customer ? o.customer.name  : '';
+  var custEmail = o.customer ? o.customer.email : '';
+  var custPhone = o.customer ? o.customer.phone : '';
+  var addrHtml  = o.orderType === 'delivery'
+    ? '<p>' + [o.address, o.city, o.postcode].filter(Boolean).join(', ') + '</p>'
+    : '<p>Collection from Inverness</p>';
+  var payBadge = o.paymentMethod === 'cash'
+    ? '<span class="pay-badge pay-cash">💵 Cash on Delivery/Collection</span>'
+    : '<span class="pay-badge pay-card">💳 Card (Square)</span>';
+  var itemRows = (o.items||[]).map(function(i){
+    return '<tr><td>' + (i.emoji||'') + ' ' + i.name + '</td><td>' + i.qty + '</td><td>' + fmtCurrency(i.price) + '</td><td>' + fmtCurrency(i.price * i.qty) + '</td></tr>';
+  }).join('');
+  var opts = ['New','Processing','Completed','Cancelled'].map(function(s){
+    return '<option value="' + s + '"' + (o.status===s?' selected':'') + '>' + s + '</option>';
+  }).join('');
+
+  document.getElementById('orderModalContent').innerHTML =
+    '<h2>Order ' + (o.id||o.firestoreId) + '</h2>' +
+    '<div class="detail-grid">' +
+      '<div class="detail-block"><h4>Customer</h4><p>' + custName + '<br><a href="mailto:' + custEmail + '">' + custEmail + '</a><br>' + custPhone + '</p></div>' +
+      '<div class="detail-block"><h4>' + (o.orderType==='delivery'?'🚚 Delivery':'🏪 Collection') + '</h4>' + addrHtml + '</div>' +
+    '</div>' +
+    '<p style="margin-bottom:14px"><strong>Payment:</strong> ' + payBadge + '</p>' +
+    '<table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead><tbody>' +
+    itemRows +
+    '<tr class="total-row"><td colspan="3"><strong>Total</strong></td><td><strong>' + fmtCurrency(o.total) + '</strong></td></tr>' +
+    '</tbody></table>' +
+    (o.notes ? '<p style="margin-top:10px"><strong>Notes:</strong> ' + o.notes + '</p>' : '') +
+    '<p style="margin-top:6px;color:#888;font-size:12px">Ordered: ' + new Date(o.date).toLocaleString('en-GB') + '</p>' +
+    '<div class="status-update-row">' +
+      '<label>Update Status:</label>' +
+      '<select id="statusSelect">' + opts + '</select>' +
+      '<button class="btn btn-primary btn-sm" onclick="updateOrderStatus(\'' + firestoreId + '\')">Update</button>' +
+    '</div>';
+  showModal('orderModalOverlay');
+}
+
+function updateOrderStatus(firestoreId) {
+  var newStatus = document.getElementById('statusSelect').value;
+  db.collection('orders').doc(firestoreId).update({ status: newStatus })
+    .then(function() { showToast('✅ Order status updated!'); hideModal('orderModalOverlay'); })
+    .catch(function(err) { showToast('❌ Error: ' + err.message); });
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function loadDashboard() {
+  var total   = allOrders.length;
+  var newOrds = allOrders.filter(function(o){ return o.status==='New'; }).length;
+  var revenue = allOrders.filter(function(o){ return o.status!=='Cancelled'; }).reduce(function(s,o){ return s+(o.total||0); },0);
+
+  document.getElementById('statTotal').textContent   = total;
+  document.getElementById('statNew').textContent     = newOrds;
+  document.getElementById('statRevenue').textContent = fmtCurrency(revenue);
+
+  // Products count from Firestore
+  db.collection('products').where('available','==',true).get().then(function(snap){
+    document.getElementById('statProducts').textContent = snap.size || 11;
+  }).catch(function(){ document.getElementById('statProducts').textContent = '—'; });
+
+  // Recent orders
+  var recent = allOrders.slice(0, 5);
+  var dashEl = document.getElementById('dashRecentOrders');
+  if (recent.length === 0) {
+    dashEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🍦</div><p>No orders yet — they\'ll appear here once customers start ordering!</p></div>';
+    return;
+  }
+  dashEl.innerHTML = '<table class="orders-table"><thead><tr><th>Order ID</th><th>Customer</th><th>Type</th><th>Total</th><th>Status</th></tr></thead><tbody>' +
+    recent.map(function(o){
+      return '<tr onclick="openOrderModal(\'' + o.firestoreId + '\')">' +
+        '<td style="font-family:\'Fredoka One\',cursive;color:var(--pink);font-size:13px">' + (o.id||o.firestoreId) + '</td>' +
+        '<td style="font-weight:700">' + (o.customer?o.customer.name:'') + '</td>' +
+        '<td>' + (o.orderType==='delivery'?'🚚':'🏪') + ' ' + (o.orderType||'') + '</td>' +
+        '<td style="font-family:\'Fredoka One\',cursive">' + fmtCurrency(o.total) + '</td>' +
+        '<td><span class="status-badge status-' + (o.status||'new').toLowerCase() + '">' + (o.status||'New') + '</span></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// ============================================================
+// PRODUCTS — FIRESTORE
+// ============================================================
+var BUILTIN = [
+  {id:'p1',name:'Biscoff',category:'Ice Cream',size:'600ml',price:4.49,emoji:'🍪',description:'Creamy ice cream packed with rich Biscoff flavour.',allergens:['Milk','Soya','Wheat (Gluten)'],available:true},
+  {id:'p2',name:'Strawberry',category:'Ice Cream',size:'600ml',price:3.99,emoji:'🍓',description:'Classic fresh strawberry ice cream.',allergens:['Milk'],available:true},
+  {id:'p3',name:'Iron Brew',category:'Ice Cream',size:'600ml',price:4.49,emoji:'🥤',description:'Made with real 1901 Irn Bru.',allergens:['Milk'],available:true},
+  {id:'p4',name:'Salted Caramel',category:'Ice Cream',size:'600ml',price:3.99,emoji:'🍮',description:'Smooth buttery caramel with sea salt.',allergens:['Milk'],available:true},
+  {id:'p5',name:'Mint Choc Chip',category:'Ice Cream',size:'600ml',price:4.49,emoji:'🌿',description:'Cool mint with milk chocolate chips.',allergens:['Milk','Soya'],available:true},
+  {id:'p6',name:'Vanilla',category:'Ice Cream',size:'600ml',price:3.99,emoji:'🍦',description:'Rich classic vanilla.',allergens:['Milk'],available:true},
+  {id:'p7',name:'Ferrero Rocher',category:'Ice Cream',size:'600ml',price:4.49,emoji:'🍫',description:'Hazelnut chocolate with Ferrero Rocher.',allergens:['Milk','Wheat (Gluten)','Nuts (Hazelnuts)','Soya'],available:true},
+  {id:'p8',name:'Raspberry',category:'Ice Cream',size:'600ml',price:3.99,emoji:'🫐',description:'Vibrant raspberry with real fruit.',allergens:['Milk'],available:true},
+  {id:'p9',name:'Maltesers',category:'Ice Cream',size:'600ml',price:4.49,emoji:'🍫',description:'Dairy Milk and Malteser ice cream.',allergens:['Milk','Wheat (Gluten)','Soya'],available:true},
+  {id:'p10',name:'Mango Sorbet',category:'Sorbet',size:'600ml',price:3.99,emoji:'🥭',description:'Dairy-free tropical mango sorbet.',allergens:[],available:true},
+  {id:'p11',name:'Strawberry Sorbet',category:'Sorbet',size:'600ml',price:4.49,emoji:'🍓',description:'Dairy-free strawberry sorbet.',allergens:[],available:true}
+];
+
+function loadProducts() {
+  db.collection('products').orderBy('name').get()
+    .then(function(snap) {
+      var products = [];
+      snap.forEach(function(doc){ products.push(Object.assign({firestoreId:doc.id}, doc.data())); });
+      if (products.length === 0) {
+        // Seed with builtin products on first run
+        var batch = db.batch();
+        BUILTIN.forEach(function(p){
+          var ref = db.collection('products').doc(p.id);
+          batch.set(ref, p);
+        });
+        batch.commit().then(function(){ loadProducts(); });
+        return;
+      }
+      renderProducts(products);
+    })
+    .catch(function(err){ console.error('Products error:', err); });
+}
+
+function renderProducts(products) {
+  var grid = document.getElementById('productsGrid');
+  grid.innerHTML = products.map(function(p){
+    return '<div class="product-card ' + (p.available?'':'unavailable') + '">' +
+      '<div class="product-emoji">' + (p.emoji||'🍦') + '</div>' +
+      '<div class="product-info">' +
+        '<strong>' + p.name + '</strong>' +
+        '<span>' + p.category + ' · ' + (p.size||'600ml') + ' · £' + parseFloat(p.price).toFixed(2) + '</span>' +
+        '<span>' + (p.available ? '✅ Available' : '❌ Hidden') + '</span>' +
+      '</div>' +
+      '<div class="product-actions">' +
+        '<button class="btn btn-ghost btn-sm" onclick="openEditProductModal(\'' + p.firestoreId + '\')">Edit</button>' +
+        '<button class="btn btn-sm ' + (p.available?'btn-danger':'btn-primary') + '" onclick="toggleProduct(\'' + p.firestoreId + '\',' + !p.available + ')">' + (p.available?'Hide':'Show') + '</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function toggleProduct(firestoreId, newAvail) {
+  db.collection('products').doc(firestoreId).update({ available: newAvail })
+    .then(function(){ showToast(newAvail ? '✅ Product visible on shop' : '🙈 Product hidden from shop'); loadProducts(); })
+    .catch(function(err){ showToast('Error: ' + err.message); });
+}
+
+function openNewProductModal() {
+  document.getElementById('productModalTitle').textContent = 'Add New Product';
+  document.getElementById('editProductId').value = '';
+  document.getElementById('editName').value = '';
+  document.getElementById('editPrice').value = '';
+  document.getElementById('editCategory').value = 'Ice Cream';
+  document.getElementById('editDesc').value = '';
+  document.getElementById('editAllergens').value = '';
+  document.getElementById('editAvailable').value = 'true';
+  showModal('productModalOverlay');
+}
+
+function openEditProductModal(firestoreId) {
+  db.collection('products').doc(firestoreId).get().then(function(doc){
+    var p = doc.data();
+    document.getElementById('productModalTitle').textContent = 'Edit Product';
+    document.getElementById('editProductId').value    = firestoreId;
+    document.getElementById('editName').value         = p.name;
+    document.getElementById('editPrice').value        = p.price;
+    document.getElementById('editCategory').value     = p.category;
+    document.getElementById('editDesc').value         = p.description||'';
+    document.getElementById('editAllergens').value    = (p.allergens||[]).join(', ');
+    document.getElementById('editAvailable').value    = String(p.available);
+    showModal('productModalOverlay');
+  });
+}
+
+function saveProduct() {
+  var id    = document.getElementById('editProductId').value;
+  var data  = {
+    name:        document.getElementById('editName').value.trim(),
+    price:       parseFloat(document.getElementById('editPrice').value),
+    category:    document.getElementById('editCategory').value,
+    description: document.getElementById('editDesc').value.trim(),
+    allergens:   document.getElementById('editAllergens').value.split(',').map(function(a){return a.trim();}).filter(Boolean),
+    available:   document.getElementById('editAvailable').value === 'true'
+  };
+  if (!data.name || isNaN(data.price)) { showToast('⚠️ Please enter a name and price.'); return; }
+  var promise = id
+    ? db.collection('products').doc(id).update(data)
+    : db.collection('products').add(Object.assign({ size:'600ml', emoji:'🍦' }, data));
+  promise
+    .then(function(){ showToast('✅ Product saved!'); hideModal('productModalOverlay'); loadProducts(); })
+    .catch(function(err){ showToast('❌ Error: ' + err.message); });
+}
+
+// ============================================================
+// PROFIT & LOSS
+// ============================================================
+function getPLData(year) {
+  try { return JSON.parse(localStorage.getItem('dollopsPL_' + year) || '{"income":[],"expenses":[]}'); }
+  catch(e) { return { income:[], expenses:[] }; }
+}
+function savePLData(year, data) {
+  localStorage.setItem('dollopsPL_' + year, JSON.stringify(data));
+}
+
+function getOrderIncomeForYear(year) {
+  var monthly = {};
+  MONTHS.forEach(function(_,i){ monthly[i]=0; });
+  allOrders.forEach(function(o){
+    if (o.status === 'Cancelled') return;
+    var d = new Date(o.date);
+    if (d.getFullYear() === year) monthly[d.getMonth()] += (o.total||0);
+  });
+  return monthly;
+}
+
+function loadPL() {
+  // Year tabs
+  var years = [2023,2024,2025,2026,2027];
+  var thisYear = new Date().getFullYear();
+  if (!years.includes(thisYear)) years.push(thisYear);
+  document.getElementById('plYearTabs').innerHTML = years.map(function(y){
+    return '<button class="pl-year-tab' + (y===currentPLYear?' active':'') + '" onclick="switchPLYear(' + y + ')">' + y + '</button>';
+  }).join('');
+
+  var data = getPLData(currentPLYear);
+  var orderInc = getOrderIncomeForYear(currentPLYear);
+
+  // Income table
+  var autoRows = MONTHS.map(function(m,i){
+    return orderInc[i]>0 ? '<tr><td>'+m+'</td><td>Order Income <span class="auto-tag">AUTO</span></td><td>'+fmtCurrency(orderInc[i])+'</td><td></td></tr>' : '';
+  }).join('');
+  var manualRows = (data.income||[]).map(function(inc,idx){
+    return '<tr><td>'+fmtDate(inc.date)+'</td><td>'+inc.desc+'</td><td>'+fmtCurrency(inc.amount)+'</td>' +
+      '<td><button class="del-btn" onclick="deleteIncome('+idx+')">✕</button></td></tr>';
+  }).join('');
+  document.getElementById('incomeBody').innerHTML = autoRows + manualRows;
+
+  // Expense table
+  document.getElementById('expenseBody').innerHTML = (data.expenses||[]).map(function(exp,idx){
+    return '<tr><td>'+fmtDate(exp.date)+'</td><td>'+exp.category+'</td><td>'+fmtCurrency(exp.amount)+'</td>' +
+      '<td><button class="del-btn" onclick="deleteExpense('+idx+')">✕</button></td></tr>';
+  }).join('');
+
+  // Totals
+  var totalOrderInc  = Object.values(orderInc).reduce(function(s,v){return s+v;},0);
+  var totalManualInc = (data.income||[]).reduce(function(s,i){return s+parseFloat(i.amount||0);},0);
+  var totalInc       = totalOrderInc + totalManualInc;
+  var totalExp       = (data.expenses||[]).reduce(function(s,e){return s+parseFloat(e.amount||0);},0);
+  var netProfit      = totalInc - totalExp;
+
+  document.getElementById('plIncome').textContent   = fmtCurrency(totalInc);
+  document.getElementById('plExpenses').textContent = fmtCurrency(totalExp);
+  document.getElementById('plProfit').textContent   = (netProfit>=0?'':'−') + fmtCurrency(Math.abs(netProfit));
+  document.getElementById('plProfit').className     = 'pl-num ' + (netProfit>=0?'pink':'red');
+  document.getElementById('plProfitCard').className = 'pl-stat profit' + (netProfit<0?' neg':'');
+
+  buildMonthlyTable(data, orderInc);
+}
+
+function buildMonthlyTable(data, orderInc) {
+  var monthlyManual = {}; MONTHS.forEach(function(_,i){ monthlyManual[i]=0; });
+  var monthlyExp    = {}; MONTHS.forEach(function(_,i){ monthlyExp[i]=0; });
+
+  (data.income||[]).forEach(function(inc){ var m=new Date(inc.date).getMonth(); monthlyManual[m]+=parseFloat(inc.amount||0); });
+  (data.expenses||[]).forEach(function(exp){ var m=new Date(exp.date).getMonth(); monthlyExp[m]+=parseFloat(exp.amount||0); });
+
+  var hdr = '<thead><tr><th>Category</th>' + MONTHS.map(function(m){ return '<th>'+m.substr(0,3)+'</th>'; }).join('') + '<th>Total</th></tr></thead>';
+
+  function buildRow(label, vals) {
+    var total = vals.reduce(function(s,v){return s+v;},0);
+    return '<tr><td>'+label+'</td>' + vals.map(function(v){ return '<td>'+(v>0?fmtCurrency(v):'—')+'</td>'; }).join('') + '<td>'+fmtCurrency(total)+'</td></tr>';
+  }
+
+  var orderVals  = MONTHS.map(function(_,i){ return orderInc[i]||0; });
+  var manualVals = MONTHS.map(function(_,i){ return monthlyManual[i]||0; });
+  var totalIncVals = MONTHS.map(function(_,i){ return (orderInc[i]||0)+(monthlyManual[i]||0); });
+  var expVals    = MONTHS.map(function(_,i){ return monthlyExp[i]||0; });
+  var profitVals = MONTHS.map(function(_,i){ return totalIncVals[i]-expVals[i]; });
+  var totalProfit = profitVals.reduce(function(s,v){return s+v;},0);
+
+  var profitRow = '<tr class="profit-row"><td>NET PROFIT</td>' +
+    profitVals.map(function(v){ return '<td style="color:'+(v>=0?'#2e7d32':'#c62828')+'">'+(v!==0?(v>=0?'':'−')+fmtCurrency(Math.abs(v)):'—')+'</td>'; }).join('') +
+    '<td style="color:'+(totalProfit>=0?'#2e7d32':'#c62828')+'">'+(totalProfit>=0?'':'−')+fmtCurrency(Math.abs(totalProfit))+'</td></tr>';
+
+  var totIncRow = '<tr class="tot-row"><td>TOTAL INCOME</td>' +
+    totalIncVals.map(function(v){ return '<td>'+(v>0?fmtCurrency(v):'—')+'</td>'; }).join('') +
+    '<td>'+fmtCurrency(totalIncVals.reduce(function(s,v){return s+v;},0))+'</td></tr>';
+
+  var totExpRow = '<tr class="tot-row"><td>TOTAL OUTGOINGS</td>' +
+    expVals.map(function(v){ return '<td>'+(v>0?fmtCurrency(v):'—')+'</td>'; }).join('') +
+    '<td>'+fmtCurrency(expVals.reduce(function(s,v){return s+v;},0))+'</td></tr>';
+
+  document.getElementById('monthlyTbl').innerHTML = hdr + '<tbody>' +
+    '<tr class="sec-head"><td colspan="14">📈 INCOMINGS</td></tr>' +
+    buildRow('Order Income (Auto)', orderVals) +
+    buildRow('Other Income', manualVals) +
+    totIncRow +
+    '<tr class="sec-head"><td colspan="14">📉 OUTGOINGS</td></tr>' +
+    buildRow('Expenses', expVals) +
+    totExpRow +
+    profitRow +
+    '</tbody>';
+}
+
+function switchPLYear(y) { currentPLYear = y; loadPL(); }
+
+function addIncome() {
+  var date=document.getElementById('incDate').value, desc=document.getElementById('incDesc').value.trim(), amount=parseFloat(document.getElementById('incAmount').value);
+  if (!date||!desc||isNaN(amount)||amount<=0){ showToast('⚠️ Please fill in all income fields.'); return; }
+  var data=getPLData(currentPLYear); data.income.push({date,desc,amount}); savePLData(currentPLYear,data);
+  document.getElementById('incDesc').value=''; document.getElementById('incAmount').value='';
+  showToast('✅ Income added!'); loadPL();
+}
+
+function addExpense() {
+  var date=document.getElementById('expDate').value, category=document.getElementById('expCat').value, amount=parseFloat(document.getElementById('expAmount').value);
+  if (!date||isNaN(amount)||amount<=0){ showToast('⚠️ Please enter a date and amount.'); return; }
+  var data=getPLData(currentPLYear); data.expenses.push({date,category,amount}); savePLData(currentPLYear,data);
+  document.getElementById('expAmount').value='';
+  showToast('✅ Expense added!'); loadPL();
+}
+
+function deleteIncome(idx) {
+  if (!confirm('Remove this income entry?')) return;
+  var data=getPLData(currentPLYear); data.income.splice(idx,1); savePLData(currentPLYear,data); loadPL();
+}
+
+function deleteExpense(idx) {
+  if (!confirm('Remove this expense?')) return;
+  var data=getPLData(currentPLYear); data.expenses.splice(idx,1); savePLData(currentPLYear,data); loadPL();
+}
+
+function clearPLData() {
+  if (!confirm('Clear ALL P&L data for ' + currentPLYear + '? This cannot be undone.')) return;
+  localStorage.removeItem('dollopsPL_' + currentPLYear);
+  showToast('P&L data cleared for ' + currentPLYear); loadPL();
+}
+
+function exportPLCSV() {
+  var data=getPLData(currentPLYear), orderInc=getOrderIncomeForYear(currentPLYear);
+  var rows=[['Dollops Ice Cream — P&L ' + currentPLYear],[]];
+  rows.push(['INCOME','Date','Description','Amount']);
+  MONTHS.forEach(function(m,i){ if(orderInc[i]>0) rows.push(['',m+' '+currentPLYear,'Order Income (AUTO)',fmtCurrency(orderInc[i])]); });
+  (data.income||[]).forEach(function(i){ rows.push(['',i.date,i.desc,fmtCurrency(i.amount)]); });
+  rows.push([]); rows.push(['OUTGOINGS','Date','Category','Amount']);
+  (data.expenses||[]).forEach(function(e){ rows.push(['',e.date,e.category,fmtCurrency(e.amount)]); });
+  var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c)+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='dollops-pl-'+currentPLYear+'.csv'; a.click();
+}
+
+// ============================================================
+// EXPORT ORDERS
+// ============================================================
+function exportOrdersCSV() {
+  if (!allOrders.length) { showToast('No orders to export.'); return; }
+  var rows=[['Order ID','Name','Email','Phone','Payment','Type','Address','Total','Status','Date']];
+  allOrders.forEach(function(o){
+    rows.push([o.id||o.firestoreId, o.customer?o.customer.name:'', o.customer?o.customer.email:'', o.customer?o.customer.phone:'',
+      o.paymentMethod||'card', o.orderType, o.orderType==='delivery'?[o.address,o.city,o.postcode].filter(Boolean).join(' '):'Collection',
+      fmtCurrency(o.total), o.status, fmtDate(o.date)]);
+  });
+  var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c)+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='dollops-orders.csv'; a.click();
+}
+</script>
+</body>
+</html>
