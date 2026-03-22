@@ -255,6 +255,7 @@
       <button class="nav-item" data-section="orders"><span class="nav-icon">📦</span> Orders <span class="badge-new hidden" id="newOrderBadge">!</span></button>
       <button class="nav-item" data-section="products"><span class="nav-icon">🍨</span> Products</button>
       <button class="nav-item" data-section="pl"><span class="nav-icon">💰</span> Profit &amp; Loss</button>
+      <button class="nav-item" data-section="reviews"><span class="nav-icon">⭐</span> Reviews</button>
       <button class="nav-item" data-section="settings"><span class="nav-icon">⚙️</span> Settings</button>
     </nav>
     <button class="logout-btn" id="logoutBtn">← Sign Out</button>
@@ -365,6 +366,15 @@
       <input type="file" id="pdfFileInput"   accept=".pdf"       style="display:none" onchange="handlePDFImport(this.files[0])" />
     </div>
 
+    <!-- REVIEWS -->
+    <div class="section" id="section-reviews">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+        <h1>Reviews</h1>
+        <button class="btn btn-primary" onclick="openNewReviewModal()">+ Add Review</button>
+      </div>
+      <div id="reviewsList"></div>
+    </div>
+
     <!-- SETTINGS -->
     <div class="section" id="section-settings">
       <h1>Settings</h1>
@@ -421,6 +431,14 @@
   <div class="modal" style="max-width:700px">
     <button class="modal-close" onclick="hideModal('importModalOverlay')">✕</button>
     <div id="importModalContent"></div>
+  </div>
+</div>
+
+<!-- REVIEW MODAL -->
+<div class="modal-overlay" id="reviewModalOverlay">
+  <div class="modal" style="max-width:520px">
+    <button class="modal-close" id="closeReviewModal">✕</button>
+    <div id="reviewModalContent"></div>
   </div>
 </div>
 
@@ -544,6 +562,7 @@ function initApp() {
       if (sec === 'orders')    renderOrders();
       if (sec === 'products')  loadProducts();
       if (sec === 'pl')        loadPL();
+      if (sec === 'reviews')   loadReviews();
     });
   });
 
@@ -553,7 +572,33 @@ function initApp() {
   });
 
   // Modals
-  document.getElementById('closeOrderModal').addEventListener('click',   function(){ hideModal('orderModalOverlay'); });
+  document.getElementById('closeOrderModal').addEventListener('click', function(){ hideModal('orderModalOverlay'); });
+  document.getElementById('closeReviewModal').addEventListener('click', function(){ hideModal('reviewModalOverlay'); });
+
+  // Event delegation for dynamically created order modal buttons
+  document.getElementById('orderModalOverlay').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    var id = window._currentOrderId;
+    if (!id) return;
+    if (btn.id === 'btnSaveOrder')   { e.stopPropagation(); saveOrderEdits(id); }
+    if (btn.id === 'btnCancelOrder') { e.stopPropagation(); hideModal('orderModalOverlay'); }
+    if (btn.id === 'btnDeleteOrder') { e.stopPropagation(); deleteOrder(id); }
+    if (btn.classList.contains('remove-item-btn')) {
+      e.stopPropagation();
+      removeOrderItem(id, parseInt(btn.dataset.idx));
+    }
+  });
+
+  // Event delegation for qty inputs
+  document.getElementById('orderModalOverlay').addEventListener('change', function(e) {
+    if (e.target.classList.contains('item-qty-input')) {
+      updateItemQty(window._currentOrderId, parseInt(e.target.dataset.idx), e.target.value);
+    }
+    if (e.target.id === 'editOrderType') {
+      document.getElementById('editAddrSection').style.display = e.target.value === 'delivery' ? 'block' : 'none';
+    }
+  });
   document.getElementById('closeProductModal').addEventListener('click',  function(){ hideModal('productModalOverlay'); });
   document.getElementById('addProductBtn').addEventListener('click',      openNewProductModal);
   document.getElementById('saveProductBtn').addEventListener('click',     saveProduct);
@@ -965,6 +1010,199 @@ function saveProduct() {
   promise
     .then(function(){ showToast('✅ Product saved!'); hideModal('productModalOverlay'); loadProducts(); })
     .catch(function(err){ showToast('❌ Error: ' + err.message); });
+}
+
+
+// ============================================================
+// REVIEWS
+// ============================================================
+function loadReviews() {
+  var list = document.getElementById('reviewsList');
+  if (!list) return;
+  list.innerHTML = '<p style="color:#aaa;padding:20px">Loading reviews...</p>';
+
+  db.collection('reviews').get()
+    .then(function(snap) {
+      var reviews = [];
+      snap.forEach(function(doc){ reviews.push(Object.assign({ firestoreId: doc.id }, doc.data())); });
+      reviews.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+
+      if (reviews.length === 0) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-icon">⭐</div><p>No reviews yet — add your first one!</p></div>';
+        return;
+      }
+
+      list.innerHTML = '';
+
+      reviews.forEach(function(r) {
+        var stars = '';
+        for (var i = 1; i <= 5; i++) stars += i <= (r.rating||5) ? '⭐' : '☆';
+
+        var card = document.createElement('div');
+        card.style.cssText = 'background:white;border-radius:16px;padding:20px 24px;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,0.05);border:2px solid ' + (r.visible ? '#fef0f6' : '#f5f5f5') + ';display:flex;justify-content:space-between;align-items:flex-start;gap:16px';
+
+        var info = document.createElement('div');
+        info.style.flex = '1';
+
+        var meta = document.createElement('div');
+        meta.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:6px';
+        meta.innerHTML = '<span style="font-size:1rem">' + stars + '</span>' +
+          '<span style="font-weight:800;font-size:0.95rem">' + (r.name||'Anonymous') + '</span>' +
+          (r.location ? '<span style="color:#aaa;font-size:0.8rem">📍 ' + r.location + '</span>' : '') +
+          '<span style="font-size:0.75rem;padding:3px 10px;border-radius:20px;font-weight:700;background:' + (r.visible?'#e8faf2':'#f5f5f5') + ';color:' + (r.visible?'#06D6A0':'#aaa') + '">' + (r.visible?'Visible':'Hidden') + '</span>';
+
+        var text = document.createElement('p');
+        text.style.cssText = 'font-size:0.88rem;color:#555;font-style:italic;line-height:1.6;margin:0';
+        text.textContent = '"' + (r.review||'') + '"';
+
+        info.appendChild(meta);
+        info.appendChild(text);
+
+        var btns = document.createElement('div');
+        btns.style.cssText = 'display:flex;gap:8px;flex-shrink:0';
+
+        var editBtn = document.createElement('button');
+        editBtn.className = 'btn btn-ghost btn-sm';
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', (function(id){ return function(){ openEditReviewModal(id); }; })(r.firestoreId));
+
+        var toggleBtn = document.createElement('button');
+        toggleBtn.className = 'btn btn-sm';
+        toggleBtn.textContent = r.visible ? 'Hide' : 'Show';
+        toggleBtn.style.cssText = r.visible ? 'background:#f0f0f0;color:#888' : 'background:var(--pink);color:white';
+        toggleBtn.addEventListener('click', (function(id, vis){ return function(){ toggleReview(id, !vis); }; })(r.firestoreId, r.visible));
+
+        btns.appendChild(editBtn);
+        btns.appendChild(toggleBtn);
+        card.appendChild(info);
+        card.appendChild(btns);
+        list.appendChild(card);
+      });
+    })
+    .catch(function(err){ list.innerHTML = '<p style="color:red">Error: ' + err.message + '</p>'; });
+}
+
+
+function toggleReview(firestoreId, newVisible) {
+  db.collection('reviews').doc(firestoreId).update({ visible: newVisible })
+    .then(function(){ showToast(newVisible ? '✅ Review now visible on website' : '🙈 Review hidden from website'); loadReviews(); })
+    .catch(function(err){ showToast('❌ ' + err.message); });
+}
+
+function openNewReviewModal() {
+  window._editingReviewId = null;
+  document.getElementById('reviewModalContent').innerHTML = buildReviewForm({});
+  attachReviewFormListeners();
+  showModal('reviewModalOverlay');
+}
+
+function openEditReviewModal(firestoreId) {
+  db.collection('reviews').doc(firestoreId).get().then(function(doc) {
+    window._editingReviewId = firestoreId;
+    document.getElementById('reviewModalContent').innerHTML = buildReviewForm(doc.data());
+    attachReviewFormListeners();
+    showModal('reviewModalOverlay');
+  });
+}
+
+function buildReviewForm(r) {
+  var s = '<h2>' + (window._editingReviewId ? 'Edit Review' : 'Add Review') + '</h2>';
+
+  // Star picker
+  s += '<div style="margin-bottom:16px">';
+  s += '<label style="font-weight:700;display:block;margin-bottom:8px">Rating</label>';
+  s += '<div id="starPicker" style="display:flex;gap:6px;font-size:2rem;cursor:pointer">';
+  for (var i = 1; i <= 5; i++) {
+    s += '<span class="star-pick" data-val="' + i + '" style="transition:transform 0.1s">' + (i <= (r.rating||5) ? '⭐' : '☆') + '</span>';
+  }
+  s += '</div></div>';
+
+  s += '<input type="hidden" id="reviewRating" value="' + (r.rating||5) + '" />';
+
+  s += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
+  s += '<div><label style="font-weight:700;display:block;margin-bottom:6px">Name</label>';
+  s += '<input id="reviewName" type="text" value="' + (r.name||'') + '" placeholder="e.g. Sarah M." style="width:100%;padding:9px 12px;border:2px solid #e8ecf0;border-radius:10px;font-size:14px;box-sizing:border-box" /></div>';
+  s += '<div><label style="font-weight:700;display:block;margin-bottom:6px">Location</label>';
+  s += '<input id="reviewLocation" type="text" value="' + (r.location||'') + '" placeholder="e.g. Inverness" style="width:100%;padding:9px 12px;border:2px solid #e8ecf0;border-radius:10px;font-size:14px;box-sizing:border-box" /></div>';
+  s += '</div>';
+
+  s += '<div style="margin-bottom:16px"><label style="font-weight:700;display:block;margin-bottom:6px">Review</label>';
+  s += '<textarea id="reviewText" placeholder="What did they say?" style="width:100%;padding:9px 12px;border:2px solid #e8ecf0;border-radius:10px;font-size:14px;min-height:100px;resize:vertical;box-sizing:border-box">' + (r.review||'') + '</textarea></div>';
+
+  s += '<div style="margin-bottom:20px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700">';
+  s += '<input type="checkbox" id="reviewVisible" ' + (r.visible!==false?'checked':'') + ' style="width:16px;height:16px" /> Show on website</label></div>';
+
+  s += '<div style="display:flex;gap:10px">';
+  s += '<button id="btnSaveReview" class="btn btn-primary">Save Review</button>';
+  s += '<button id="btnCancelReview" class="btn btn-ghost">Cancel</button>';
+  if (window._editingReviewId) {
+    s += '<button id="btnDeleteReview" style="margin-left:auto;padding:8px 18px;border-radius:50px;border:none;background:#e53e3e;color:white;font-weight:800;cursor:pointer;font-size:13px">Delete</button>';
+  }
+  s += '</div>';
+  return s;
+}
+
+function attachReviewFormListeners() {
+  // Star picker
+  var rating = parseInt(document.getElementById('reviewRating').value) || 5;
+  document.querySelectorAll('.star-pick').forEach(function(star) {
+    star.addEventListener('click', function() {
+      rating = parseInt(this.dataset.val);
+      document.getElementById('reviewRating').value = rating;
+      document.querySelectorAll('.star-pick').forEach(function(s, i) {
+        s.textContent = i < rating ? '⭐' : '☆';
+      });
+    });
+    star.addEventListener('mouseover', function() {
+      var hov = parseInt(this.dataset.val);
+      document.querySelectorAll('.star-pick').forEach(function(s, i) {
+        s.textContent = i < hov ? '⭐' : '☆';
+        s.style.transform = i < hov ? 'scale(1.2)' : 'scale(1)';
+      });
+    });
+    star.addEventListener('mouseout', function() {
+      document.querySelectorAll('.star-pick').forEach(function(s, i) {
+        s.textContent = i < rating ? '⭐' : '☆';
+        s.style.transform = 'scale(1)';
+      });
+    });
+  });
+
+  document.getElementById('btnSaveReview').addEventListener('click', saveReview);
+  document.getElementById('btnCancelReview').addEventListener('click', function(){ hideModal('reviewModalOverlay'); });
+  var delBtn = document.getElementById('btnDeleteReview');
+  if (delBtn) {
+    delBtn.addEventListener('click', function() {
+      if (!confirm('Delete this review? This cannot be undone.')) return;
+      db.collection('reviews').doc(window._editingReviewId).delete()
+        .then(function(){ showToast('🗑 Review deleted.'); hideModal('reviewModalOverlay'); loadReviews(); })
+        .catch(function(err){ showToast('❌ ' + err.message); });
+    });
+  }
+}
+
+function saveReview() {
+  var data = {
+    name:     document.getElementById('reviewName').value.trim(),
+    location: document.getElementById('reviewLocation').value.trim(),
+    review:   document.getElementById('reviewText').value.trim(),
+    rating:   parseInt(document.getElementById('reviewRating').value) || 5,
+    visible:  document.getElementById('reviewVisible').checked,
+    date:     window._editingReviewId
+      ? (function(){ var el = document.getElementById('reviewDate'); return el ? el.value : new Date().toISOString().split('T')[0]; })()
+      : new Date().toISOString().split('T')[0]
+  };
+
+  if (!data.review) { showToast('⚠️ Please enter the review text.'); return; }
+  if (!data.name)   { showToast('⚠️ Please enter the reviewer name.'); return; }
+
+  var promise = window._editingReviewId
+    ? db.collection('reviews').doc(window._editingReviewId).update(data)
+    : db.collection('reviews').add(data);
+
+  promise
+    .then(function(){ showToast('✅ Review saved!'); hideModal('reviewModalOverlay'); loadReviews(); })
+    .catch(function(err){ showToast('❌ ' + err.message); });
 }
 
 // ============================================================
