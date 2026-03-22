@@ -13,9 +13,12 @@ let latestVersion = null;
 let checkInterval = null;
 
 // ---- AUTO UPDATER CONFIG ----
-autoUpdater.autoDownload         = false;
-autoUpdater.autoInstallOnAppQuit = true;
-autoUpdater.logger               = null; // silence default logging
+autoUpdater.autoDownload              = false;
+autoUpdater.autoInstallOnAppQuit      = true;
+autoUpdater.logger                    = null;
+autoUpdater.allowDowngrade            = false;
+// Skip signature verification since app is not code signed
+autoUpdater.verifyUpdateCodeSignature = false;
 
 // ---- TRAY ----
 function createTray() {
