@@ -234,14 +234,10 @@
   <div class="login-card">
     <div class="login-logo">🍦</div>
     <h1>Dollops Admin</h1>
-    <p>Sign in to manage your store</p>
-    <div class="form-group">
-      <label>Email</label>
-      <input type="email" id="loginEmail" placeholder="ross@dollopsicecream.uk" />
-    </div>
+    <p>Enter your password to continue</p>
     <div class="form-group">
       <label>Password</label>
-      <input type="password" id="loginPassword" placeholder="••••••••" />
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" />
     </div>
     <div class="login-error" id="loginError"></div>
     <button class="btn btn-primary btn-full" id="loginBtn">Sign In →</button>
@@ -492,8 +488,10 @@ function hideModal(id) {
 }
 
 // ============================================================
-// AUTH
+// AUTH — password only (email fixed behind the scenes)
 // ============================================================
+const FIXED_EMAIL = 'ross@dollopsicecream.uk';
+
 auth.onAuthStateChanged(function(user) {
   document.getElementById('loadingOverlay').classList.add('hidden');
   if (user) {
@@ -510,14 +508,15 @@ document.getElementById('loginBtn').addEventListener('click', doLogin);
 document.getElementById('loginPassword').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
 
 function doLogin() {
-  var email = document.getElementById('loginEmail').value.trim();
   var pass  = document.getElementById('loginPassword').value;
   var errEl = document.getElementById('loginError');
   errEl.textContent = '';
-  if (!email || !pass) { errEl.textContent = 'Please enter your email and password.'; return; }
-  auth.signInWithEmailAndPassword(email, pass)
+  if (!pass) { errEl.textContent = 'Please enter your password.'; return; }
+  errEl.textContent = 'Signing in...';
+  auth.signInWithEmailAndPassword(FIXED_EMAIL, pass)
+    .then(function() { errEl.textContent = ''; })
     .catch(function(err) {
-      errEl.textContent = 'Incorrect email or password. Please try again.';
+      errEl.textContent = 'Incorrect password. Please try again.';
     });
 }
 
@@ -626,48 +625,175 @@ function renderOrders() {
 function openOrderModal(firestoreId) {
   var o = allOrders.find(function(x){ return x.firestoreId === firestoreId; });
   if (!o) return;
-  var custName  = o.customer ? o.customer.name  : '';
-  var custEmail = o.customer ? o.customer.email : '';
-  var custPhone = o.customer ? o.customer.phone : '';
-  var addrHtml  = o.orderType === 'delivery'
-    ? '<p>' + [o.address, o.city, o.postcode].filter(Boolean).join(', ') + '</p>'
-    : '<p>Collection from Inverness</p>';
-  var payBadge = o.paymentMethod === 'cash'
-    ? '<span class="pay-badge pay-cash">💵 Cash on Delivery/Collection</span>'
-    : '<span class="pay-badge pay-card">💳 Card (Square)</span>';
-  var itemRows = (o.items||[]).map(function(i){
-    return '<tr><td>' + (i.emoji||'') + ' ' + i.name + '</td><td>' + i.qty + '</td><td>' + fmtCurrency(i.price) + '</td><td>' + fmtCurrency(i.price * i.qty) + '</td></tr>';
-  }).join('');
-  var opts = ['New','Processing','Completed','Cancelled'].map(function(s){
+
+  var tip        = parseFloat(o.tip || 0);
+  var total      = parseFloat(o.total || 0);
+  var grandTotal = total + tip;
+
+  var statusOpts = ['New','Processing','Completed','Cancelled'].map(function(s){
     return '<option value="' + s + '"' + (o.status===s?' selected':'') + '>' + s + '</option>';
+  }).join('');
+  var typeOpts = ['delivery','collection'].map(function(t){
+    return '<option value="' + t + '"' + (o.orderType===t?' selected':'') + '>' + (t==='delivery'?'🚚 Delivery':'🏪 Collection') + '</option>';
+  }).join('');
+  var payOpts = ['card','cash'].map(function(p){
+    return '<option value="' + p + '"' + (o.paymentMethod===p?' selected':'') + '>' + (p==='card'?'💳 Card':'💵 Cash') + '</option>';
+  }).join('');
+  var itemRows = (o.items||[]).map(function(i, idx){
+    return '<tr>' +
+      '<td>' + (i.emoji||'🍦') + ' ' + i.name + '</td>' +
+      '<td><input type="number" min="1" value="' + i.qty + '" style="width:55px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="updateItemQtyByIdx(' + idx + ', this.value, \'" + firestoreId + "\')" /></td>' +
+      '<td>' + fmtCurrency(i.price) + '</td>' +
+      '<td>' + fmtCurrency(i.price * i.qty) + '</td>' +
+      '<td><button style="background:none;border:none;color:#ccc;cursor:pointer;font-size:15px" onclick="removeOrderItemByIdx(' + idx + ', \'" + firestoreId + "\')" title="Remove">&#x2715;</button></td>' +
+    '</tr>';
   }).join('');
 
   document.getElementById('orderModalContent').innerHTML =
     '<h2>Order ' + (o.id||o.firestoreId) + '</h2>' +
-    '<div class="detail-grid">' +
-      '<div class="detail-block"><h4>Customer</h4><p>' + custName + '<br><a href="mailto:' + custEmail + '">' + custEmail + '</a><br>' + custPhone + '</p></div>' +
-      '<div class="detail-block"><h4>' + (o.orderType==='delivery'?'🚚 Delivery':'🏪 Collection') + '</h4>' + addrHtml + '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">' +
+      '<div>' +
+        '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">👤 Customer</h4>' +
+        '<div style="display:flex;flex-direction:column;gap:6px">' +
+          '<input id="editCustName"  type="text"  value="' + (o.customer?o.customer.name:'')  + '" placeholder="Name"  style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
+          '<input id="editCustEmail" type="email" value="' + (o.customer?o.customer.email:'') + '" placeholder="Email" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
+          '<input id="editCustPhone" type="tel"   value="' + (o.customer?o.customer.phone:'') + '" placeholder="Phone" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
+        '</div>' +
+      '</div>' +
+      '<div>' +
+        '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">📦 Order Details</h4>' +
+        '<div style="display:flex;flex-direction:column;gap:6px">' +
+          '<select id="editOrderType" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif">' + typeOpts + '</select>' +
+          '<select id="editPayMethod" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif">' + payOpts + '</select>' +
+          '<select id="editStatus"    style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif">' + statusOpts + '</select>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
-    '<p style="margin-bottom:14px"><strong>Payment:</strong> ' + payBadge + '</p>' +
-    '<table class="items-table"><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead><tbody>' +
-    itemRows +
-    '<tr class="total-row"><td colspan="3"><strong>Total</strong></td><td><strong>' + fmtCurrency(o.total) + '</strong></td></tr>' +
-    '</tbody></table>' +
-    (o.notes ? '<p style="margin-top:10px"><strong>Notes:</strong> ' + o.notes + '</p>' : '') +
-    '<p style="margin-top:6px;color:#888;font-size:12px">Ordered: ' + new Date(o.date).toLocaleString('en-GB') + '</p>' +
-    '<div class="status-update-row">' +
-      '<label>Update Status:</label>' +
-      '<select id="statusSelect">' + opts + '</select>' +
-      '<button class="btn btn-primary btn-sm" onclick="updateOrderStatus(\'' + firestoreId + '\')">Update</button>' +
-    '</div>';
+    '<div id="editAddrSection" style="' + (o.orderType!=='delivery'?'display:none;':'') + 'margin-bottom:14px">' +
+      '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">🚚 Delivery Address</h4>' +
+      '<div style="display:grid;grid-template-columns:2fr 1fr;gap:6px">' +
+        '<input id="editAddr"     type="text" value="' + (o.address||'')  + '" placeholder="Street" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
+        '<input id="editPostcode" type="text" value="' + (o.postcode||'') + '" placeholder="Postcode" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
+        '<input id="editCity"     type="text" value="' + (o.city||'')     + '" placeholder="City" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif;grid-column:span 2" />' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-bottom:14px">' +
+      '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:6px">📝 Notes</h4>' +
+      '<textarea id="editNotes" style="width:100%;padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;min-height:55px;resize:vertical;font-family:Nunito,sans-serif">' + (o.notes||'') + '</textarea>' +
+    '</div>' +
+    '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">🍦 Items</h4>' +
+    '<table class="items-table" style="margin-bottom:12px"><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th><th></th></tr></thead>' +
+    '<tbody>' + itemRows + '</tbody></table>' +
+    '<div style="background:#fff0f8;border-radius:12px;padding:14px;margin-bottom:14px">' +
+      '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
+        '<span style="font-weight:700">Order Total:</span>' +
+        '<span style="font-family:Fredoka One,cursive;font-size:17px">' + fmtCurrency(total) + '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+        '<label style="font-weight:700;white-space:nowrap">💝 Tip:</label>' +
+        '<input id="editTip" type="number" min="0" step="0.01" value="' + tip.toFixed(2) + '" placeholder="0.00" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:14px;width:90px;font-family:Nunito,sans-serif" />' +
+        '<span style="color:#888;font-size:12px">Auto-added to P&L as income</span>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #f0d8e8">' +
+        '<span style="font-weight:800">Grand Total:</span>' +
+        '<span style="font-family:Fredoka One,cursive;font-size:20px;color:var(--pink)">' + fmtCurrency(grandTotal) + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+      '<button class="btn btn-primary btn-sm" onclick="saveOrderEdits(\'" + firestoreId + "\')">💾 Save Changes</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="hideModal(\'orderModalOverlay\')">Cancel</button>' +
+      '<button style="margin-left:auto;padding:8px 18px;border-radius:50px;border:none;background:#e53e3e;color:white;font-weight:800;cursor:pointer;font-size:13px" onclick="deleteOrder(\'" + firestoreId + "\')">🗑 Delete Order</button>' +
+    '</div>' +
+    '<p style="margin-top:8px;color:#aaa;font-size:11px">Ordered: ' + new Date(o.date).toLocaleString('en-GB') + '</p>';
+
+  document.getElementById('editOrderType').addEventListener('change', function() {
+    document.getElementById('editAddrSection').style.display = this.value === 'delivery' ? 'block' : 'none';
+  });
+
   showModal('orderModalOverlay');
 }
 
+function saveOrderEdits(firestoreId) {
+  var o = allOrders.find(function(x){ return x.firestoreId === firestoreId; });
+  if (!o) return;
+  var tip      = parseFloat(document.getElementById('editTip').value || 0);
+  var oldTip   = parseFloat(o.tip || 0);
+  var orderType = document.getElementById('editOrderType').value;
+  var updates  = {
+    status:        document.getElementById('editStatus').value,
+    orderType:     orderType,
+    paymentMethod: document.getElementById('editPayMethod').value,
+    notes:         document.getElementById('editNotes').value,
+    tip:           tip,
+    customer: {
+      name:  document.getElementById('editCustName').value.trim(),
+      email: document.getElementById('editCustEmail').value.trim(),
+      phone: document.getElementById('editCustPhone').value.trim()
+    }
+  };
+  if (orderType === 'delivery') {
+    updates.address  = document.getElementById('editAddr').value.trim();
+    updates.city     = document.getElementById('editCity').value.trim();
+    updates.postcode = document.getElementById('editPostcode').value.trim();
+  }
+  db.collection('orders').doc(firestoreId).update(updates)
+    .then(function() {
+      if (tip !== oldTip) {
+        var year = new Date(o.date).getFullYear();
+        var date = new Date(o.date).toISOString().split('T')[0];
+        var plKey = 'dollopsPL_' + year;
+        var plData;
+        try { plData = JSON.parse(localStorage.getItem(plKey) || '{"income":[],"expenses":[]}'); } catch(e) { plData = {income:[],expenses:[]}; }
+        plData.income = plData.income.filter(function(i){ return i.orderId !== firestoreId; });
+        if (tip > 0) plData.income.push({ date: date, desc: 'Tip (Order ' + (o.id||firestoreId) + ')', amount: tip, orderId: firestoreId });
+        localStorage.setItem(plKey, JSON.stringify(plData));
+      }
+      showToast('✅ Order saved!');
+      hideModal('orderModalOverlay');
+    })
+    .catch(function(err) { showToast('❌ ' + err.message); });
+}
+
+function deleteOrder(firestoreId) {
+  var o = allOrders.find(function(x){ return x.firestoreId === firestoreId; });
+  if (!confirm('Delete order ' + (o?o.id||firestoreId:firestoreId) + '? This cannot be undone.')) return;
+  db.collection('orders').doc(firestoreId).delete()
+    .then(function() { showToast('🗑 Order deleted.'); hideModal('orderModalOverlay'); })
+    .catch(function(err) { showToast('❌ ' + err.message); });
+}
+
+function updateItemQtyByIdx(idx, newQty, firestoreId) { updateItemQty(firestoreId, idx, newQty); }
+function removeOrderItemByIdx(idx, firestoreId) { removeOrderItem(firestoreId, idx); }
+function updateItemQty(firestoreId, idx, newQty) {
+  var o = allOrders.find(function(x){ return x.firestoreId === firestoreId; });
+  if (!o) return;
+  var items = JSON.parse(JSON.stringify(o.items||[]));
+  newQty = parseInt(newQty); if (isNaN(newQty)||newQty<1) newQty=1;
+  items[idx].qty = newQty;
+  var newTotal = items.reduce(function(s,i){ return s+(i.price*i.qty); },0);
+  db.collection('orders').doc(firestoreId).update({items:items,total:newTotal})
+    .then(function(){ showToast('✅ Qty updated!'); })
+    .catch(function(err){ showToast('❌ '+err.message); });
+}
+
+function removeOrderItem(firestoreId, idx) {
+  var o = allOrders.find(function(x){ return x.firestoreId === firestoreId; });
+  if (!o||!o.items||o.items.length<=1){ showToast('⚠️ Cannot remove the last item.'); return; }
+  if (!confirm('Remove this item?')) return;
+  var items = JSON.parse(JSON.stringify(o.items));
+  items.splice(idx,1);
+  var newTotal = items.reduce(function(s,i){ return s+(i.price*i.qty); },0);
+  db.collection('orders').doc(firestoreId).update({items:items,total:newTotal})
+    .then(function(){ showToast('✅ Item removed!'); openOrderModal(firestoreId); })
+    .catch(function(err){ showToast('❌ '+err.message); });
+}
+
 function updateOrderStatus(firestoreId) {
-  var newStatus = document.getElementById('statusSelect').value;
-  db.collection('orders').doc(firestoreId).update({ status: newStatus })
-    .then(function() { showToast('✅ Order status updated!'); hideModal('orderModalOverlay'); })
-    .catch(function(err) { showToast('❌ Error: ' + err.message); });
+  var sel = document.getElementById('statusSelect');
+  if (!sel) return;
+  db.collection('orders').doc(firestoreId).update({status: sel.value})
+    .then(function(){ showToast('✅ Status updated!'); hideModal('orderModalOverlay'); })
+    .catch(function(err){ showToast('❌ '+err.message); });
 }
 
 // ============================================================
