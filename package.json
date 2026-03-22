@@ -1,6 +1,6 @@
 {
   "name": "dollops-admin",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Dollops Ice Cream — Admin Management System",
   "author": {
     "name": "Ross Mackenzie",
@@ -22,6 +22,7 @@
       "main.js",
       "src/**/*",
       "assets/**/*",
+      "updater/**/*",
       "node_modules/**/*"
     ],
     "publish": {

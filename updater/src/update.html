@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dollops Admin — Update</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --pink: #FF6B9D; --dark: #1a1a2e; --green: #06D6A0;
+      --bg: #FFFBF5; --border: #f0e8f5;
+    }
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      user-select: none;
+    }
+    h1 { font-family: 'Fredoka One', cursive; font-size: 28px; color: var(--dark); margin-bottom: 6px; }
+    p  { font-size: 15px; color: #666; line-height: 1.6; text-align: center; margin-bottom: 20px; }
+
+    .icon { font-size: 64px; margin-bottom: 16px; animation: bounce 1.5s ease-in-out infinite; }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+
+    /* ---- PROGRESS BAR ---- */
+    .progress-wrap {
+      width: 100%;
+      background: #f0e8f5;
+      border-radius: 50px;
+      height: 18px;
+      overflow: hidden;
+      margin-bottom: 10px;
+      border: 2px solid var(--border);
+    }
+    .progress-bar {
+      height: 100%;
+      border-radius: 50px;
+      background: linear-gradient(90deg, var(--pink), #ff9ecc);
+      width: 0%;
+      transition: width 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-bar::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { to { left: 100%; } }
+    .progress-stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 24px;
+      font-weight: 700;
+    }
+
+    /* ---- BUTTONS ---- */
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 50px;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+    .btn-primary { background: var(--pink); color: white; box-shadow: 0 4px 16px rgba(255,107,157,0.35); }
+    .btn-primary:hover { background: #e0578a; transform: translateY(-2px); }
+    .btn-primary:disabled { background: #ddd; color: #aaa; box-shadow: none; transform: none; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: #888; border: 2px solid #ddd; }
+    .btn-ghost:hover { border-color: var(--pink); color: var(--pink); }
+    .btn-success { background: var(--green); color: white; box-shadow: 0 4px 16px rgba(6,214,160,0.35); }
+    .btn-success:hover { background: #05b88a; transform: translateY(-2px); }
+
+    /* ---- SCREENS ---- */
+    .screen { display: none; width: 100%; text-align: center; }
+    .screen.active { display: flex; flex-direction: column; align-items: center; }
+
+    /* Success checkmark */
+    .success-icon { font-size: 80px; margin-bottom: 16px; animation: pop 0.4s ease; }
+    @keyframes pop { 0%{transform:scale(0)} 80%{transform:scale(1.1)} 100%{transform:scale(1)} }
+
+    .version-badge {
+      background: #fff0f8;
+      border: 2px solid var(--pink);
+      border-radius: 50px;
+      padding: 6px 20px;
+      font-weight: 800;
+      color: var(--pink);
+      font-size: 15px;
+      margin-bottom: 20px;
+      display: inline-block;
+    }
+    .error-box {
+      background: #fff5f5;
+      border: 2px solid #ef5350;
+      border-radius: 14px;
+      padding: 16px;
+      color: #c62828;
+      font-size: 14px;
+      margin-bottom: 20px;
+      width: 100%;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SCREEN 1: Ready to download -->
+  <div class="screen active" id="screenReady">
+    <div class="icon">🍦</div>
+    <h1>Update Available!</h1>
+    <div class="version-badge" id="versionBadge">New Version</div>
+    <p>A new version of Dollops Admin is ready to download. Click below to start — you can keep working while it downloads.</p>
+    <button class="btn btn-primary" id="btnDownload">⬇️ Download Update</button>
+    <button class="btn btn-ghost" id="btnLaterReady">Remind Me Later</button>
+  </div>
+
+  <!-- SCREEN 2: Downloading with progress -->
+  <div class="screen" id="screenDownloading">
+    <div class="icon" style="animation:none">⬇️</div>
+    <h1>Downloading...</h1>
+    <p>Please wait while the update downloads. This usually takes less than a minute.</p>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="progress-stats">
+      <span id="statPercent">0%</span>
+      <span id="statSpeed">-- KB/s</span>
+      <span id="statSize">0 / 0 MB</span>
+    </div>
+    <button class="btn btn-primary" id="btnInstall" disabled>Install & Restart 🚀</button>
+  </div>
+
+  <!-- SCREEN 3: Success -->
+  <div class="screen" id="screenSuccess">
+    <div class="success-icon">🎉</div>
+    <h1>Success!</h1>
+    <p>Dollops Admin has been updated successfully and is ready to use.</p>
+    <button class="btn btn-success" id="btnContinue">Continue — Open Dollops Admin 🍦</button>
+  </div>
+
+  <!-- SCREEN 4: Error -->
+  <div class="screen" id="screenError">
+    <div class="icon" style="animation:none">⚠️</div>
+    <h1>Update Failed</h1>
+    <div class="error-box" id="errorMsg"></div>
+    <p>You can try again or check your internet connection.</p>
+    <button class="btn btn-primary" id="btnRetry">Try Again</button>
+    <button class="btn btn-ghost" id="btnLaterError">Close</button>
+  </div>
+
+<script>
+  const { ipcRenderer } = require('electron');
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+
+  // ---- BUTTONS ----
+  document.getElementById('btnDownload').addEventListener('click', function() {
+    showScreen('screenDownloading');
+    ipcRenderer.send('start-download');
+  });
+
+  document.getElementById('btnLaterReady').addEventListener('click', function() {
+    ipcRenderer.send('close-update-win');
+  });
+
+  document.getElementById('btnInstall').addEventListener('click', function() {
+    this.disabled = true;
+    this.textContent = 'Installing...';
+    ipcRenderer.send('install-update');
+  });
+
+  document.getElementById('btnContinue').addEventListener('click', function() {
+    ipcRenderer.send('open-dollops');
+    ipcRenderer.send('close-update-win');
+  });
+
+  document.getElementById('btnRetry').addEventListener('click', function() {
+    showScreen('screenDownloading');
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('statPercent').textContent = '0%';
+    document.getElementById('btnInstall').disabled = true;
+    ipcRenderer.send('start-download');
+  });
+
+  document.getElementById('btnLaterError').addEventListener('click', function() {
+    ipcRenderer.send('close-update-win');
+  });
+
+  // ---- IPC EVENTS FROM MAIN ----
+  ipcRenderer.on('download-start', function(event, data) {
+    if (data && data.version) {
+      document.getElementById('versionBadge').textContent = 'v' + data.version;
+    }
+    showScreen('screenDownloading');
+  });
+
+  ipcRenderer.on('download-progress', function(event, data) {
+    document.getElementById('progressBar').style.width   = data.percent + '%';
+    document.getElementById('statPercent').textContent   = data.percent + '%';
+    document.getElementById('statSpeed').textContent     = data.speed + ' KB/s';
+    document.getElementById('statSize').textContent      = data.transferred + ' / ' + data.total + ' MB';
+  });
+
+  ipcRenderer.on('update-downloaded', function(event, data) {
+    // Show 100% briefly then enable install button
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('statPercent').textContent = '100%';
+    setTimeout(function() {
+      var btn = document.getElementById('btnInstall');
+      btn.disabled = false;
+      btn.textContent = 'Install & Restart 🚀';
+    }, 600);
+  });
+
+  // After install completes, main process restarts — but if it signals success first:
+  ipcRenderer.on('install-complete', function() {
+    showScreen('screenSuccess');
+  });
+
+  ipcRenderer.on('update-error', function(event, data) {
+    document.getElementById('errorMsg').textContent = data.message || 'An unknown error occurred.';
+    showScreen('screenError');
+  });
+</script>
+</body>
+</html>
