@@ -224,45 +224,30 @@ function parseTSBStatement(text, filename) {
   }
   if (segs.length) segs[segs.length-1].text = text.substring(last);
 
-  // ---- Extract opening balance to seed direction detection ----
-  var prevBalance = null;
-  var openMatch = text.match(/Balance on[^\[\£]*(\[|£)(\d[\d,]*\.\d{2})/i);
-  if (!openMatch) openMatch = text.match(/OPENING BALANCE[^\d]*(\d[\d,]*\.\d{2})/i);
-  if (openMatch) prevBalance = parseFloat(openMatch[openMatch.length-1].replace(',',''));
-
   var txs = [];
   segs.forEach(function(seg) {
     var txt = (seg.raw + ' ' + seg.text).trim();
 
-    // Skip opening/closing balance rows
+    // Always skip opening and closing balance rows
     if (/OPENING BALANCE|CLOSING BALANCE/i.test(txt)) return;
 
-    // Extract all decimal numbers
+    // Extract all decimal numbers from this segment
     var nums=[], nr=/\b(\d{1,3}(?:,\d{3})*\.\d{2})\b/g, nm;
     while((nm=nr.exec(txt))!==null) nums.push(parseFloat(nm[1].replace(',','')));
 
-    // Need exactly 2 numbers: [tx_amount, new_balance]
-    // 1 number = balance only (skip), 3+ = closing balance row (skip)
-    if (nums.length < 2) return;
-    if (nums.length >= 3) return;
+    // TSB layout rules (confirmed from actual statement):
+    // - Every transaction row has exactly 2 numbers: [tx_amount, running_balance]
+    // - The LAST number is ALWAYS the running balance — ignore it completely
+    // - The FIRST number is the actual transaction amount
+    // - Rows with only 1 number are balance-only summary lines — skip them
+    // - Rows with 3+ numbers are statement totals (e.g. closing balance row) — skip them
+    if (nums.length < 2) return;  // balance-only or empty row
+    if (nums.length >= 3) return; // statement total/closing row
 
-    var amt     = nums[0];  // transaction amount
-    var newBal  = nums[1];  // running balance after transaction
+    var amt  = nums[0]; // transaction amount only — nums[1] (balance) is discarded
     if (amt < 0.01) return;
 
-    // *** DIRECTION: use balance change — 100% accurate, no keyword guessing ***
-    // If balance went UP → money came IN. If balance went DOWN → money went OUT.
-    var isIncome;
-    if (prevBalance !== null) {
-      var change = Math.round((newBal - prevBalance) * 100) / 100;
-      isIncome = change > 0;
-    } else {
-      // Fallback to keywords only if we have no previous balance
-      isIncome = /CREDIT INTEREST|INTEREST|REFUND|CASHBACK/.test(txt.toUpperCase());
-    }
-    prevBalance = newBal;
-
-    // Build clean description
+    // Build clean description — strip date, payment type keywords, and all numbers
     var desc = txt
       .replace(/\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2}/gi,'')
       .replace(/\b(?:FASTER PAYMENT|DIRECT DEBIT|STANDING ORDER|CREDIT INTEREST|DEBIT CARD|ATM|BACS|CD \d+)\b/gi,'')
@@ -270,17 +255,17 @@ function parseTSBStatement(text, filename) {
       .replace(/\s{2,}/g,' ').trim();
     if (!desc) return;
 
-    txs.push({ date: seg.date, details: desc, moneyIn: isIncome?amt:0, moneyOut: isIncome?0:amt, category: categorizeTSB(desc,isIncome) });
+    var isInc = classifyTSB(desc);
+    txs.push({ date: seg.date, details: desc, moneyIn: isInc?amt:0, moneyOut: isInc?0:amt, category: categorizeTSB(desc,isInc) });
   });
 
   if (!txs.length) { showToast('No transactions found — check this is a TSB statement PDF.'); return; }
   showBankPreview(txs, statYear, filename);
 }
 
-// classifyTSB no longer used for direction — kept only for category hints
 function classifyTSB(d) {
   var u=d.toUpperCase();
-  if (/CREDIT INTEREST|INTEREST/.test(u)) return true;
+  if (/CREDIT INTEREST|INTEREST|DOLLOPS|REFUND|CASHBACK|MACKENZIE|ROSS/.test(u)) return true;
   if (/TESCO|ASDA|SAINSBURY|MORRISONS|LIDL|ALDI|AMAZON|PAYPAL|GOOGLE|APPLE|NATIONWIDE SAVINGS/.test(u)) return false;
   return false;
 }
