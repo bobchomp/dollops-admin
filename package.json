@@ -1,6 +1,6 @@
 {
   "name": "dollops-admin",
-  "version": "1.3.7",
+  "version": "1.3.8",
   "description": "Dollops Ice Cream — Admin Management System",
   "author": {
     "name": "Ross Mackenzie",
@@ -33,11 +33,11 @@
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "zip",  "arch": ["x64"] }
       ],
       "icon": "assets/icon.ico",
       "publisherName": "Ross Mackenzie",
-      "signingHashAlgorithms": null,
       "sign": null
     },
     "nsis": {

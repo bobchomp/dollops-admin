@@ -17,8 +17,10 @@ autoUpdater.autoDownload              = false;
 autoUpdater.autoInstallOnAppQuit      = true;
 autoUpdater.logger                    = null;
 autoUpdater.allowDowngrade            = false;
-// Skip signature verification since app is not code signed
+// Skip signature verification — app is not code signed
 autoUpdater.verifyUpdateCodeSignature = false;
+// Force zip channel for updates — avoids PowerShell execution policy blocking .exe
+autoUpdater.channel                   = 'latest';
 
 // ---- TRAY ----
 function createTray() {
