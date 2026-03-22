@@ -1,26 +1,47 @@
 // ============================================================
 // DOLLOPS ADMIN — Main Entry Point
-// Also spawns the background updater service on launch
 // ============================================================
 
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fs   = require('fs');
 const { spawn } = require('child_process');
 
 let mainWindow;
-let updaterProcess = null;
 
-// ---- SPAWN BACKGROUND UPDATER ----
+// ---- SPAWN BACKGROUND UPDATER (only once) ----
 function startUpdaterService() {
   try {
-    const updaterPath = path.join(__dirname, 'updater', 'updater.js');
-    const electronExe = process.execPath;
+    // Check if updater is already running via a lock file
+    const lockFile = path.join(app.getPath('userData'), 'updater.lock');
 
-    updaterProcess = spawn(electronExe, [updaterPath, '--hidden'], {
-      detached: true,   // runs independently of main app
-      stdio: 'ignore'   // don't pipe output
+    // If lock file exists and is recent (< 70 mins old), updater is already running
+    if (fs.existsSync(lockFile)) {
+      var stats = fs.statSync(lockFile);
+      var ageMs = Date.now() - stats.mtimeMs;
+      if (ageMs < 70 * 60 * 1000) {
+        console.log('Updater already running, skipping spawn.');
+        return;
+      }
+    }
+
+    // Only spawn if we are NOT already the updater process
+    if (process.argv.includes('--updater')) return;
+
+    var updaterScript = path.join(__dirname, 'updater', 'updater.js');
+    if (!fs.existsSync(updaterScript)) {
+      console.log('Updater script not found, skipping.');
+      return;
+    }
+
+    var child = spawn(process.execPath, [updaterScript, '--updater', '--hidden'], {
+      detached: true,
+      stdio:    'ignore',
+      env:      Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '' })
     });
-    updaterProcess.unref(); // let it run after main app closes
+    child.unref();
+    console.log('Updater service started, PID:', child.pid);
+
   } catch(err) {
     console.log('Updater service could not start:', err.message);
   }
@@ -54,7 +75,8 @@ function createWindow() {
 // ---- START ----
 app.whenReady().then(function() {
   createWindow();
-  startUpdaterService(); // launch updater in background
+  // Small delay before spawning updater so main window loads first
+  setTimeout(startUpdaterService, 3000);
 });
 
 app.on('window-all-closed', function() {
