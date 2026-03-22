@@ -39,7 +39,7 @@ setInterval(writeLock, 60 * 60 * 1000);
 // Path to installed Dollops Admin
 const ADMIN_EXE = path.join(
   process.env.LOCALAPPDATA || '',
-  'Programs', 'dollops-admin', 'Dollops Admin.exe'
+  'Programs', 'Dollops Admin', 'Dollops Admin.exe'
 );
 
 // ---- AUTO START WITH WINDOWS ----
