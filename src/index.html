@@ -626,88 +626,116 @@ function openOrderModal(firestoreId) {
   var o = allOrders.find(function(x){ return x.firestoreId === firestoreId; });
   if (!o) return;
 
+  // Store current order id on window so event listeners can access it
+  window._currentOrderId = firestoreId;
+
   var tip        = parseFloat(o.tip || 0);
   var total      = parseFloat(o.total || 0);
   var grandTotal = total + tip;
 
-  var statusOpts = ['New','Processing','Completed','Cancelled'].map(function(s){
-    return '<option value="' + s + '"' + (o.status===s?' selected':'') + '>' + s + '</option>';
-  }).join('');
-  var typeOpts = ['delivery','collection'].map(function(t){
-    return '<option value="' + t + '"' + (o.orderType===t?' selected':'') + '>' + (t==='delivery'?'🚚 Delivery':'🏪 Collection') + '</option>';
-  }).join('');
-  var payOpts = ['card','cash'].map(function(p){
-    return '<option value="' + p + '"' + (o.paymentMethod===p?' selected':'') + '>' + (p==='card'?'💳 Card':'💵 Cash') + '</option>';
-  }).join('');
-  var itemRows = (o.items||[]).map(function(i, idx){
-    return '<tr>' +
-      '<td>' + (i.emoji||'🍦') + ' ' + i.name + '</td>' +
-      '<td><input type="number" min="1" value="' + i.qty + '" style="width:55px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="updateItemQtyByIdx(' + idx + ', this.value, \'" + firestoreId + "\')" /></td>' +
-      '<td>' + fmtCurrency(i.price) + '</td>' +
-      '<td>' + fmtCurrency(i.price * i.qty) + '</td>' +
-      '<td><button style="background:none;border:none;color:#ccc;cursor:pointer;font-size:15px" onclick="removeOrderItemByIdx(' + idx + ', \'" + firestoreId + "\')" title="Remove">&#x2715;</button></td>' +
-    '</tr>';
-  }).join('');
+  var s = '<h2>Order ' + (o.id||o.firestoreId) + '</h2>';
 
-  document.getElementById('orderModalContent').innerHTML =
-    '<h2>Order ' + (o.id||o.firestoreId) + '</h2>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">' +
-      '<div>' +
-        '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">👤 Customer</h4>' +
-        '<div style="display:flex;flex-direction:column;gap:6px">' +
-          '<input id="editCustName"  type="text"  value="' + (o.customer?o.customer.name:'')  + '" placeholder="Name"  style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
-          '<input id="editCustEmail" type="email" value="' + (o.customer?o.customer.email:'') + '" placeholder="Email" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
-          '<input id="editCustPhone" type="tel"   value="' + (o.customer?o.customer.phone:'') + '" placeholder="Phone" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
-        '</div>' +
-      '</div>' +
-      '<div>' +
-        '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">📦 Order Details</h4>' +
-        '<div style="display:flex;flex-direction:column;gap:6px">' +
-          '<select id="editOrderType" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif">' + typeOpts + '</select>' +
-          '<select id="editPayMethod" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif">' + payOpts + '</select>' +
-          '<select id="editStatus"    style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif">' + statusOpts + '</select>' +
-        '</div>' +
-      '</div>' +
-    '</div>' +
-    '<div id="editAddrSection" style="' + (o.orderType!=='delivery'?'display:none;':'') + 'margin-bottom:14px">' +
-      '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">🚚 Delivery Address</h4>' +
-      '<div style="display:grid;grid-template-columns:2fr 1fr;gap:6px">' +
-        '<input id="editAddr"     type="text" value="' + (o.address||'')  + '" placeholder="Street" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
-        '<input id="editPostcode" type="text" value="' + (o.postcode||'') + '" placeholder="Postcode" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif" />' +
-        '<input id="editCity"     type="text" value="' + (o.city||'')     + '" placeholder="City" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;font-family:Nunito,sans-serif;grid-column:span 2" />' +
-      '</div>' +
-    '</div>' +
-    '<div style="margin-bottom:14px">' +
-      '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:6px">📝 Notes</h4>' +
-      '<textarea id="editNotes" style="width:100%;padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;min-height:55px;resize:vertical;font-family:Nunito,sans-serif">' + (o.notes||'') + '</textarea>' +
-    '</div>' +
-    '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">🍦 Items</h4>' +
-    '<table class="items-table" style="margin-bottom:12px"><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th><th></th></tr></thead>' +
-    '<tbody>' + itemRows + '</tbody></table>' +
-    '<div style="background:#fff0f8;border-radius:12px;padding:14px;margin-bottom:14px">' +
-      '<div style="display:flex;justify-content:space-between;margin-bottom:8px">' +
-        '<span style="font-weight:700">Order Total:</span>' +
-        '<span style="font-family:Fredoka One,cursive;font-size:17px">' + fmtCurrency(total) + '</span>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
-        '<label style="font-weight:700;white-space:nowrap">💝 Tip:</label>' +
-        '<input id="editTip" type="number" min="0" step="0.01" value="' + tip.toFixed(2) + '" placeholder="0.00" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:14px;width:90px;font-family:Nunito,sans-serif" />' +
-        '<span style="color:#888;font-size:12px">Auto-added to P&L as income</span>' +
-      '</div>' +
-      '<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #f0d8e8">' +
-        '<span style="font-weight:800">Grand Total:</span>' +
-        '<span style="font-family:Fredoka One,cursive;font-size:20px;color:var(--pink)">' + fmtCurrency(grandTotal) + '</span>' +
-      '</div>' +
-    '</div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-      '<button class="btn btn-primary btn-sm" onclick="saveOrderEdits(\'" + firestoreId + "\')">💾 Save Changes</button>' +
-      '<button class="btn btn-ghost btn-sm" onclick="hideModal(\'orderModalOverlay\')">Cancel</button>' +
-      '<button style="margin-left:auto;padding:8px 18px;border-radius:50px;border:none;background:#e53e3e;color:white;font-weight:800;cursor:pointer;font-size:13px" onclick="deleteOrder(\'" + firestoreId + "\')">🗑 Delete Order</button>' +
-    '</div>' +
-    '<p style="margin-top:8px;color:#aaa;font-size:11px">Ordered: ' + new Date(o.date).toLocaleString('en-GB') + '</p>';
+  // Customer + Order Details grid
+  s += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">';
+  s += '<div><h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">Customer</h4>';
+  s += '<div style="display:flex;flex-direction:column;gap:6px">';
+  s += '<input id="editCustName"  type="text"  value="' + ((o.customer&&o.customer.name)||'')  + '" placeholder="Name"  style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px" />';
+  s += '<input id="editCustEmail" type="email" value="' + ((o.customer&&o.customer.email)||'') + '" placeholder="Email" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px" />';
+  s += '<input id="editCustPhone" type="tel"   value="' + ((o.customer&&o.customer.phone)||'') + '" placeholder="Phone" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px" />';
+  s += '</div></div>';
 
+  s += '<div><h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">Order Details</h4>';
+  s += '<div style="display:flex;flex-direction:column;gap:6px">';
+  s += '<select id="editOrderType" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px">';
+  s += '<option value="delivery"'   + (o.orderType==='delivery'?'   selected':'') + '>Delivery</option>';
+  s += '<option value="collection"' + (o.orderType==='collection'?' selected':'') + '>Collection</option>';
+  s += '</select>';
+  s += '<select id="editPayMethod" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px">';
+  s += '<option value="card"' + (o.paymentMethod==='card'?' selected':'') + '>Card</option>';
+  s += '<option value="cash"' + (o.paymentMethod==='cash'?' selected':'') + '>Cash</option>';
+  s += '</select>';
+  s += '<select id="editStatus" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px">';
+  ['New','Processing','Completed','Cancelled'].forEach(function(st){
+    s += '<option value="' + st + '"' + (o.status===st?' selected':'') + '>' + st + '</option>';
+  });
+  s += '</select>';
+  s += '</div></div></div>';
+
+  // Delivery address
+  s += '<div id="editAddrSection" style="' + (o.orderType!=='delivery'?'display:none;':'') + 'margin-bottom:14px">';
+  s += '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">Delivery Address</h4>';
+  s += '<div style="display:grid;grid-template-columns:2fr 1fr;gap:6px">';
+  s += '<input id="editAddr"     type="text" value="' + (o.address||'')  + '" placeholder="Street"   style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px" />';
+  s += '<input id="editPostcode" type="text" value="' + (o.postcode||'') + '" placeholder="Postcode" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px" />';
+  s += '<input id="editCity"     type="text" value="' + (o.city||'')     + '" placeholder="City"     style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;grid-column:span 2" />';
+  s += '</div></div>';
+
+  // Notes
+  s += '<div style="margin-bottom:14px"><h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:6px">Notes</h4>';
+  s += '<textarea id="editNotes" style="width:100%;padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:13px;min-height:55px;resize:vertical">' + (o.notes||'') + '</textarea></div>';
+
+  // Items table
+  s += '<h4 style="font-family:Fredoka One,cursive;color:var(--pink);margin-bottom:8px">Items</h4>';
+  s += '<table class="items-table" style="margin-bottom:12px"><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th><th></th></tr></thead><tbody>';
+  (o.items||[]).forEach(function(item, idx){
+    s += '<tr>';
+    s += '<td>' + (item.emoji||'') + ' ' + item.name + '</td>';
+    s += '<td><input type="number" min="1" value="' + item.qty + '" class="item-qty-input" data-idx="' + idx + '" style="width:55px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;font-size:13px" /></td>';
+    s += '<td>' + fmtCurrency(item.price) + '</td>';
+    s += '<td>' + fmtCurrency(item.price * item.qty) + '</td>';
+    s += '<td><button class="remove-item-btn" data-idx="' + idx + '" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:15px" title="Remove">&#x2715;</button></td>';
+    s += '</tr>';
+  });
+  s += '</tbody></table>';
+
+  // Tip + totals
+  s += '<div style="background:#fff0f8;border-radius:12px;padding:14px;margin-bottom:14px">';
+  s += '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">Order Total:</span><span style="font-family:Fredoka One,cursive;font-size:17px">' + fmtCurrency(total) + '</span></div>';
+  s += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">';
+  s += '<label style="font-weight:700;white-space:nowrap">Tip:</label>';
+  s += '<input id="editTip" type="number" min="0" step="0.01" value="' + tip.toFixed(2) + '" placeholder="0.00" style="padding:7px 10px;border:2px solid #e8ecf0;border-radius:10px;font-size:14px;width:90px" />';
+  s += '<span style="color:#888;font-size:12px">Auto-added to P&L as income</span>';
+  s += '</div>';
+  s += '<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #f0d8e8"><span style="font-weight:800">Grand Total:</span><span style="font-family:Fredoka One,cursive;font-size:20px;color:var(--pink)">' + fmtCurrency(grandTotal) + '</span></div>';
+  s += '</div>';
+
+  // Action buttons — use IDs, no onclick attributes at all
+  s += '<div style="display:flex;gap:10px;flex-wrap:wrap">';
+  s += '<button id="btnSaveOrder"   class="btn btn-primary btn-sm">Save Changes</button>';
+  s += '<button id="btnCancelOrder" class="btn btn-ghost btn-sm">Cancel</button>';
+  s += '<button id="btnDeleteOrder" style="margin-left:auto;padding:8px 18px;border-radius:50px;border:none;background:#e53e3e;color:white;font-weight:800;cursor:pointer;font-size:13px">Delete Order</button>';
+  s += '</div>';
+  s += '<p style="margin-top:8px;color:#aaa;font-size:11px">Ordered: ' + new Date(o.date).toLocaleString('en-GB') + '</p>';
+
+  document.getElementById('orderModalContent').innerHTML = s;
+
+  // Attach event listeners AFTER innerHTML is set
   document.getElementById('editOrderType').addEventListener('change', function() {
     document.getElementById('editAddrSection').style.display = this.value === 'delivery' ? 'block' : 'none';
+  });
+
+  document.getElementById('btnSaveOrder').addEventListener('click', function() {
+    saveOrderEdits(window._currentOrderId);
+  });
+
+  document.getElementById('btnCancelOrder').addEventListener('click', function() {
+    hideModal('orderModalOverlay');
+  });
+
+  document.getElementById('btnDeleteOrder').addEventListener('click', function() {
+    deleteOrder(window._currentOrderId);
+  });
+
+  document.querySelectorAll('.item-qty-input').forEach(function(input) {
+    input.addEventListener('change', function() {
+      updateItemQty(window._currentOrderId, parseInt(this.dataset.idx), this.value);
+    });
+  });
+
+  document.querySelectorAll('.remove-item-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      removeOrderItem(window._currentOrderId, parseInt(this.dataset.idx));
+    });
   });
 
   showModal('orderModalOverlay');
