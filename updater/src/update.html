@@ -143,15 +143,22 @@
       <span id="statSpeed">-- KB/s</span>
       <span id="statSize">0 / 0 MB</span>
     </div>
-    <button class="btn btn-primary" id="btnInstall" disabled>Install & Restart 🚀</button>
+    <button class="btn btn-primary" id="btnInstall" disabled>Open Installer 📂</button>
   </div>
 
-  <!-- SCREEN 3: Success -->
+  <!-- SCREEN 3: Open installer instructions -->
   <div class="screen" id="screenSuccess">
-    <div class="success-icon">🎉</div>
-    <h1>Success!</h1>
-    <p>Dollops Admin has been updated successfully and is ready to use.</p>
-    <button class="btn btn-success" id="btnContinue">Continue — Open Dollops Admin 🍦</button>
+    <div class="success-icon">📂</div>
+    <h1>Installer Ready!</h1>
+    <p>File Explorer has opened with the installer highlighted.</p>
+    <div style="background:#fff8e8;border:2px solid #ffd966;border-radius:14px;padding:16px;margin-bottom:20px;text-align:left;font-size:14px;line-height:1.8">
+      <strong>To install:</strong><br>
+      1. Double-click the <code>.exe</code> file in Explorer<br>
+      2. If Windows shows a warning, click <strong>More info</strong><br>
+      3. Then click <strong>Run anyway</strong><br>
+      4. Follow the installer steps
+    </div>
+    <button class="btn btn-success" id="btnContinue">Got it — Close This Window</button>
   </div>
 
   <!-- SCREEN 4: Error -->
@@ -221,13 +228,13 @@
   });
 
   ipcRenderer.on('update-downloaded', function(event, data) {
-    // Show 100% briefly then enable install button
     document.getElementById('progressBar').style.width = '100%';
     document.getElementById('statPercent').textContent = '100%';
     setTimeout(function() {
       var btn = document.getElementById('btnInstall');
       btn.disabled = false;
-      btn.textContent = 'Install & Restart 🚀';
+      btn.textContent = 'Open Installer 📂';
+      btn.title = 'Opens the installer in File Explorer — double-click it and click Run Anyway';
     }, 600);
   });
 

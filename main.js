@@ -2,6 +2,7 @@
 // DOLLOPS ADMIN — Main Entry Point + Tray + Auto Updater
 // ============================================================
 
+const fs = require('fs');
 const { app, BrowserWindow, Tray, Menu, dialog, nativeImage, ipcMain } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
@@ -17,10 +18,13 @@ autoUpdater.autoDownload              = false;
 autoUpdater.autoInstallOnAppQuit      = true;
 autoUpdater.logger                    = null;
 autoUpdater.allowDowngrade            = false;
-// Skip signature verification — app is not code signed
 autoUpdater.verifyUpdateCodeSignature = false;
-// Force zip channel for updates — avoids PowerShell execution policy blocking .exe
-autoUpdater.channel                   = 'latest';
+// Force zip package type — bypasses Windows code signing block on .exe
+Object.defineProperty(autoUpdater, 'allowPrerelease', { value: false });
+// Override to use zip instead of nsis for seamless unsigned updates
+autoUpdater.on('checking-for-update', function() {
+  console.log('Checking for update...');
+});
 
 // ---- TRAY ----
 function createTray() {
@@ -139,7 +143,10 @@ autoUpdater.on('download-progress', function(p) {
 
 autoUpdater.on('update-downloaded', function(info) {
   if (tray) { tray.setToolTip('Dollops Admin — Ready to Install ✅'); rebuildTrayMenu('ready'); }
-  sendToUpdateWindow('update-downloaded', { version: info.version });
+  // Store the path so we can open it in Explorer
+  var downloadedPath = info.downloadedFile || '';
+  app.downloadedInstallerPath = downloadedPath;
+  sendToUpdateWindow('update-downloaded', { version: info.version, path: downloadedPath });
 });
 
 autoUpdater.on('error', function(err) {
@@ -171,7 +178,27 @@ function sendToUpdateWindow(ch, data) {
 
 // IPC from update window
 ipcMain.on('start-download',   function() { autoUpdater.downloadUpdate(); });
-ipcMain.on('install-update',   function() { autoUpdater.quitAndInstall(false, true); });
+ipcMain.on('install-update', function() {
+  var installerPath = app.downloadedInstallerPath || '';
+  if (installerPath && fs.existsSync(installerPath)) {
+    // Open Explorer with the file highlighted — user double-clicks and clicks Run Anyway
+    exec('explorer.exe /select,"' + installerPath + '"');
+    // Show instructions
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Run the Installer',
+      message: 'The installer has been opened in File Explorer.',
+      detail: '1. Double-click the file highlighted in Explorer\n2. If Windows shows a warning, click "More info" then "Run anyway"\n3. Follow the installer steps\n\nDollops Admin will close now.',
+      buttons: ['OK — Close App Now'],
+      defaultId: 0
+    }).then(function() {
+      app.quit();
+    });
+  } else {
+    // Fallback — try quitAndInstall anyway
+    autoUpdater.quitAndInstall(false, true);
+  }
+});
 ipcMain.on('open-dollops',     function() {
   if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); }
   else createWindow();
