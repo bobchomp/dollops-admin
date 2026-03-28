@@ -1,7 +1,7 @@
 {
   "name": "dollops-admin",
-  "version": "1.3.11",
-  "description": "Dollops Ice Cream — Admin Management System",
+  "version": "1.3.12",
+  "description": "Dollops Ice Cream \u2014 Admin Management System",
   "author": {
     "name": "Ross Mackenzie",
     "email": "ross@dollopsicecream.uk"
@@ -17,7 +17,7 @@
   "build": {
     "appId": "uk.dollopsicecream.admin",
     "productName": "Dollops Admin",
-    "copyright": "© 2025 Ross Mackenzie — Dollops Ice Cream",
+    "copyright": "\u00a9 2025 Ross Mackenzie \u2014 Dollops Ice Cream",
     "files": [
       "main.js",
       "src/**/*",
@@ -33,8 +33,18 @@
     },
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "zip",  "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "assets/icon.ico",
       "publisherName": "Ross Mackenzie",
@@ -48,13 +58,17 @@
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "allowElevation": true,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "differentialPackage": false
     },
     "mac": {
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.business",
@@ -66,7 +80,6 @@
     "electron-builder": "^24.0.0"
   },
   "dependencies": {
-    "electron-updater": "^6.1.7",
     "firebase": "^10.7.0"
   }
 }
